@@ -1,0 +1,174 @@
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Paleta Banca Privada */
+  --navy-deep: #0A1628;        /* Azul marino más profundo */
+  --navy: #0F2444;             /* Azul marino principal */
+  --navy-mid: #1A3458;         /* Azul marino medio */
+  --navy-light: #2C4A73;       /* Azul marino claro */
+
+  --gold: #B8924A;             /* Dorado principal — refinado */
+  --gold-light: #C9A663;       /* Dorado claro */
+  --gold-pale: #F5EAD0;        /* Dorado pálido para fondos */
+
+  --cream: #FAF7F1;            /* Crema fondo */
+  --cream-warm: #F2EDE2;       /* Crema cálido */
+  --paper: #FFFFFF;            /* Blanco puro */
+
+  --slate-50: #F8FAFC;
+  --slate-100: #F1F5F9;
+  --slate-200: #E2E8F0;
+  --slate-300: #CBD5E1;
+  --slate-400: #94A3B8;
+  --slate-500: #64748B;
+  --slate-600: #475569;
+  --slate-700: #334155;
+  --slate-800: #1E293B;
+  --slate-900: #0F172A;
+
+  --success: #2D6B47;          /* Verde oscuro elegante */
+  --success-light: #E8F1EC;
+  --warning: #A0651B;          /* Ámbar oscuro */
+  --warning-light: #FBF3E4;
+  --danger: #8B2331;           /* Rojo vino */
+  --danger-light: #F5E6E8;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  font-feature-settings: 'cv11', 'ss01', 'ss02';
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: linear-gradient(180deg, #FAF7F1 0%, #F5F0E4 100%);
+  color: #0F2444;
+  font-feature-settings: 'cv11', 'ss01', 'ss02', 'tnum';
+  -webkit-font-smoothing: antialiased;
+  letter-spacing: -0.011em;
+}
+
+.font-serif {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-feature-settings: 'liga', 'dlig';
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}
+
+/* Scrollbar discreto */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
+
+/* Borde dorado refinado para acentos */
+.gold-border {
+  border-color: #B8924A;
+}
+
+.gold-text {
+  color: #B8924A;
+}
+
+/* Efectos sutiles */
+.elevated {
+  box-shadow:
+    0 1px 2px 0 rgba(15, 36, 68, 0.04),
+    0 4px 8px -2px rgba(15, 36, 68, 0.06),
+    0 12px 24px -6px rgba(15, 36, 68, 0.04);
+}
+
+.elevated-strong {
+  box-shadow:
+    0 2px 4px 0 rgba(15, 36, 68, 0.06),
+    0 8px 16px -4px rgba(15, 36, 68, 0.08),
+    0 20px 40px -10px rgba(15, 36, 68, 0.06);
+}
+
+/* Animación sutil al cargar */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.fade-in {
+  animation: fadeInUp 0.4s ease-out;
+}
+
+/* Línea decorativa dorada */
+.divider-gold {
+  height: 1px;
+  background: linear-gradient(90deg, transparent 0%, #B8924A 50%, transparent 100%);
+}
+
+/* Card premium */
+.card-premium {
+  background: #FFFFFF;
+  border: 1px solid rgba(184, 146, 74, 0.15);
+  border-radius: 6px;
+  position: relative;
+}
+
+.card-premium::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent 0%, #B8924A 50%, transparent 100%);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.card-premium-hero {
+  background: #FFFFFF;
+  border: 1px solid rgba(184, 146, 74, 0.25);
+  border-radius: 6px;
+  position: relative;
+  overflow: hidden;
+}
+
+.card-premium-hero::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, transparent 0%, #B8924A 50%, transparent 100%);
+}
+
+/* Texto refinado */
+.text-eyebrow {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #B8924A;
+}
+
+.text-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #64748B;
+}
+
+.text-headline {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: #0F2444;
+}
