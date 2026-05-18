@@ -143,11 +143,11 @@ export const HISTORICO_INICIAL: MesData[] = [
     }
   },
   {
-    mes: "2026-03", label: "MAR 2026", honorarioTotal: 174534, minutosConsumidos: 7245, avActivo: true,
+    mes: "2026-03", label: "MAR 2026", honorarioTotal: 174534, minutosConsumidos: 7276, avActivo: true,
     carteras: {
       "BANISTMO ACTIVA":     { minutosAV: 1490, honorario: 40767, honorarioMesAnterior: 25274, promesas: 561, llamadas: 2692, efectivas: 802 },
       "BANISTMO RECOVERY":   { minutosAV: 1308, honorario: 39168, honorarioMesAnterior: 27417, promesas: 45,  llamadas: 7939, efectivas: 650 },
-      "SURA":                { minutosAV: 29,   honorario: 52679, honorarioMesAnterior: 40734, promesas: 8,   llamadas: 48,   efectivas: 14  },
+      "SURA":                { minutosAV: 2086, honorario: 52679, honorarioMesAnterior: 40734, promesas: 8,   llamadas: 48,   efectivas: 14  },
       "TIGO":                { minutosAV: 1286, honorario: 10356, honorarioMesAnterior: 11968, promesas: 459, llamadas: 1883, efectivas: 640 },
       "KREDIYA":             { minutosAV: 1268, honorario: 12148, honorarioMesAnterior: 10228, promesas: 124, llamadas: 4710, efectivas: 723 },
       "BAC RECOVERY":        { minutosAV: 190,  honorario: 6987,  honorarioMesAnterior: 3548,  promesas: 75,  llamadas: 368,  efectivas: 96  },
@@ -156,19 +156,19 @@ export const HISTORICO_INICIAL: MesData[] = [
       "RODELAG":             { minutosAV: 375,  honorario: 0,     honorarioMesAnterior: 0,     promesas: 78,  llamadas: 981,  efectivas: 187 },
     }
   },
-  // ── ABRIL 2026 — cerrado, igual estructura ───────────────────────────────
+  // ── ABRIL 2026 — minutos reales cargados, honorario pendiente ─────────────
   {
-    mes: "2026-04", label: "ABR 2026", honorarioTotal: 0, minutosConsumidos: 0, avActivo: true,
+    mes: "2026-04", label: "ABR 2026", honorarioTotal: 0, minutosConsumidos: 5653, avActivo: true,
     carteras: {
-      "BANISTMO ACTIVA":     { minutosAV: 0, honorario: 0, honorarioMesAnterior: 40767, promesas: 0, llamadas: 0, efectivas: 0 },
-      "BANISTMO RECOVERY":   { minutosAV: 0, honorario: 0, honorarioMesAnterior: 39168, promesas: 0, llamadas: 0, efectivas: 0 },
-      "SURA":                { minutosAV: 0, honorario: 0, honorarioMesAnterior: 52679, promesas: 0, llamadas: 0, efectivas: 0 },
-      "TIGO":                { minutosAV: 0, honorario: 0, honorarioMesAnterior: 10356, promesas: 0, llamadas: 0, efectivas: 0 },
-      "KREDIYA":             { minutosAV: 0, honorario: 0, honorarioMesAnterior: 12148, promesas: 0, llamadas: 0, efectivas: 0 },
-      "BAC RECOVERY":        { minutosAV: 0, honorario: 0, honorarioMesAnterior: 6987,  promesas: 0, llamadas: 0, efectivas: 0 },
-      "SOLVE":               { minutosAV: 0, honorario: 0, honorarioMesAnterior: 8970,  promesas: 0, llamadas: 0, efectivas: 0 },
-      "BANCO LA HIPOTECARIA":{ minutosAV: 0, honorario: 0, honorarioMesAnterior: 2420,  promesas: 0, llamadas: 0, efectivas: 0 },
-      "RODELAG":             { minutosAV: 0, honorario: 0, honorarioMesAnterior: 0,     promesas: 0, llamadas: 0, efectivas: 0 },
+      "BANISTMO ACTIVA":     { minutosAV: 1670, honorario: 0, honorarioMesAnterior: 40767, promesas: 0, llamadas: 0, efectivas: 0 },
+      "BANISTMO RECOVERY":   { minutosAV: 142,  honorario: 0, honorarioMesAnterior: 39168, promesas: 0, llamadas: 0, efectivas: 0 },
+      "SURA":                { minutosAV: 2086, honorario: 0, honorarioMesAnterior: 52679, promesas: 0, llamadas: 0, efectivas: 0 },
+      "TIGO":                { minutosAV: 1270, honorario: 0, honorarioMesAnterior: 10356, promesas: 0, llamadas: 0, efectivas: 0 },
+      "KREDIYA":             { minutosAV: 288,  honorario: 0, honorarioMesAnterior: 12148, promesas: 0, llamadas: 0, efectivas: 0 },
+      "BAC RECOVERY":        { minutosAV: 0,    honorario: 0, honorarioMesAnterior: 6987,  promesas: 0, llamadas: 0, efectivas: 0 },
+      "SOLVE":               { minutosAV: 197,  honorario: 0, honorarioMesAnterior: 8970,  promesas: 0, llamadas: 0, efectivas: 0 },
+      "BANCO LA HIPOTECARIA":{ minutosAV: 0,    honorario: 0, honorarioMesAnterior: 2420,  promesas: 0, llamadas: 0, efectivas: 0 },
+      "RODELAG":             { minutosAV: 0,    honorario: 0, honorarioMesAnterior: 0,     promesas: 0, llamadas: 0, efectivas: 0 },
     }
   },
   // ── MES ACTUAL — MAYO 2026 (editable) ────────────────────────────────────
@@ -194,8 +194,10 @@ export const BOLSA_INICIAL: BolsaMinutos = {
   cantidadRecarga: 14000,
   historial: [
     { fecha: "2026-05-01", tipo: "recarga",  cantidad: 14000, descripcion: "Recarga mensual Mayo 2026" },
-    { fecha: "2026-04-30", tipo: "consumo",  cantidad: 7245,  descripcion: "Consumo Abril 2026" },
+    { fecha: "2026-04-30", tipo: "consumo",  cantidad: 5653,  descripcion: "Consumo Abril 2026 (5,653 min)" },
     { fecha: "2026-04-01", tipo: "recarga",  cantidad: 14000, descripcion: "Recarga mensual Abril 2026" },
+    { fecha: "2026-03-31", tipo: "consumo",  cantidad: 7276,  descripcion: "Consumo Marzo 2026 (7,276 min)" },
+    { fecha: "2026-03-01", tipo: "recarga",  cantidad: 14000, descripcion: "Recarga mensual Marzo 2026" },
   ]
 }
 
