@@ -1,0 +1,185 @@
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --navy-deep: #0A1628;
+  --navy: #0F2444;
+  --navy-mid: #1A3458;
+  --navy-light: #2C4A73;
+
+  --gold: #B8924A;
+  --gold-light: #C9A663;
+  --gold-pale: #F5EAD0;
+
+  --cream: #FAF7F1;
+  --cream-warm: #F2EDE2;
+  --paper: #FFFFFF;
+
+  --success: #2D6B47;
+  --success-light: #E8F1EC;
+  --warning: #A0651B;
+  --warning-light: #FBF3E4;
+  --danger: #8B2331;
+  --danger-light: #F5E6E8;
+}
+
+* { box-sizing: border-box; }
+
+html { font-feature-settings: 'cv11', 'ss01', 'ss02'; }
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: linear-gradient(180deg, #FAF7F1 0%, #F5F0E4 100%);
+  color: #0F2444;
+  font-feature-settings: 'cv11', 'ss01', 'ss02', 'tnum';
+  -webkit-font-smoothing: antialiased;
+  letter-spacing: -0.011em;
+}
+
+/* TIPOGRAFÍA DE NÚMEROS - consistente */
+.font-serif {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-feature-settings: 'liga', 'dlig';
+}
+
+/* NÚMEROS GRANDES (KPIs, métricas hero) - serif elegante */
+.num-hero {
+  font-family: 'Inter', sans-serif;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum', 'cv11';
+  letter-spacing: -0.025em;
+}
+
+/* NÚMEROS DE TABLA - sans-serif tabular para alineación perfecta */
+.num-table {
+  font-family: 'Inter', sans-serif;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+  letter-spacing: -0.005em;
+}
+
+/* NÚMEROS PEQUEÑOS / METADATA */
+.num-small {
+  font-family: 'Inter', sans-serif;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
+
+.gold-border { border-color: #B8924A; }
+.gold-text { color: #B8924A; }
+
+.elevated {
+  box-shadow:
+    0 1px 2px 0 rgba(15, 36, 68, 0.04),
+    0 4px 8px -2px rgba(15, 36, 68, 0.06),
+    0 12px 24px -6px rgba(15, 36, 68, 0.04);
+}
+
+.elevated-strong {
+  box-shadow:
+    0 2px 4px 0 rgba(15, 36, 68, 0.06),
+    0 8px 16px -4px rgba(15, 36, 68, 0.08),
+    0 20px 40px -10px rgba(15, 36, 68, 0.06);
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.fade-in { animation: fadeInUp 0.4s ease-out; }
+
+.divider-gold {
+  height: 1px;
+  background: linear-gradient(90deg, transparent 0%, #B8924A 50%, transparent 100%);
+}
+
+.card-premium {
+  background: #FFFFFF;
+  border: 1px solid rgba(184, 146, 74, 0.15);
+  border-radius: 6px;
+  position: relative;
+}
+
+.card-premium-hero {
+  background: #FFFFFF;
+  border: 1px solid rgba(184, 146, 74, 0.25);
+  border-radius: 6px;
+  position: relative;
+  overflow: hidden;
+}
+
+.card-premium-hero::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent 0%, #B8924A 50%, transparent 100%);
+}
+
+.text-eyebrow {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #B8924A;
+}
+
+.text-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #64748B;
+}
+
+/* Input editable estilo premium */
+input.editable-num {
+  font-family: 'Inter', sans-serif;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  background: #FFFBEB;
+  border: 1px solid #FCD34D;
+  border-radius: 4px;
+  padding: 6px 10px;
+  text-align: right;
+  color: #92400E;
+  transition: all 0.15s;
+  width: 100%;
+  outline: none;
+}
+
+input.editable-num:focus {
+  border-color: #B8924A;
+  background: #FFFFFF;
+  box-shadow: 0 0 0 3px rgba(184, 146, 74, 0.15);
+}
+
+input.editable-num:hover:not(:focus) {
+  border-color: #F59E0B;
+}
+
+/* Selector de mes */
+.month-selector {
+  font-family: 'Inter', sans-serif;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
