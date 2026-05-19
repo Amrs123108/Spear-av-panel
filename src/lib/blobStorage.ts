@@ -121,7 +121,7 @@ export async function guardarDatos(datos: DatosPanel): Promise<boolean> {
     const blob = new Blob([json], { type: 'application/json' })
     
     await put(BLOB_PATHNAME, blob, {
-      access: 'public',
+      access: 'private',
       allowOverwrite: true,
     })
     return true

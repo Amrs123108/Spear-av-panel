@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback, Fragment } from 'react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
-import { TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, Sparkles, Brain, RefreshCw, ChevronDown, ChevronUp, Edit3, Save, AlertTriangle, CheckCircle2, Info, ClipboardList, Calendar, Target, X } from 'lucide-react'
+import { TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, Sparkles, Brain, RefreshCw, ChevronDown, ChevronUp, Edit3, Save, AlertTriangle, CheckCircle2, Info, ClipboardList, Calendar, Target, X, Upload } from 'lucide-react'
 import { HISTORICO_INICIAL, CARTERAS_CONFIG, BOLSA_INICIAL, PLAN_INICIAL, MesData, PlanSemanal } from '@/lib/store'
 import { loadMesActual, saveMesActual, loadPlan, savePlan, recalcularMes } from '@/lib/persistence'
 
@@ -347,6 +347,158 @@ function GraficoHistorico({ historico }: { historico: DashData['historico'] }) {
   )
 }
 
+// ── Panel de carga de archivos ────────────────────────────────────────
+function PanelCargaArchivos({ mesActual, onExito, onCerrar }: {
+  mesActual: string; onExito: () => void; onCerrar: () => void
+}) {
+  const [archivos, setArchivos] = useState<File[]>([])
+  const [cargando, setCargando] = useState(false)
+  const [resultado, setResultado] = useState<any>(null)
+  const [error, setError] = useState('')
+
+  const meses = [
+    { value: '2026-05', label: 'MAY 2026 (actual)' },
+    { value: '2026-04', label: 'ABR 2026' },
+    { value: '2026-03', label: 'MAR 2026' },
+    { value: '2026-02', label: 'FEB 2026' },
+    { value: '2026-01', label: 'ENE 2026' },
+  ]
+  const [mesSeleccionado, setMesSeleccionado] = useState(mesActual || '2026-05')
+
+  const agregarArchivos = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const nuevos = Array.from(e.target.files || [])
+    setArchivos(prev => [...prev, ...nuevos])
+    setResultado(null); setError('')
+  }
+
+  const quitarArchivo = (idx: number) => setArchivos(prev => prev.filter((_, i) => i !== idx))
+
+  const getIcono = (nombre: string) => {
+    const n = nombre.toUpperCase()
+    if (n.includes('SIGELLA')) return '👥'
+    if (n.includes('RECORDATORIO')) return '🔔'
+    if (n.includes('COBRO')) return '💳'
+    return '📄'
+  }
+
+  const cargar = async () => {
+    if (!archivos.length) return
+    setCargando(true); setError(''); setResultado(null)
+    try {
+      const fd = new FormData()
+      archivos.forEach(f => fd.append('archivos', f))
+      fd.append('mes', mesSeleccionado)
+      const res = await fetch('/api/upload-excel', { method: 'POST', body: fd })
+      const data = await res.json()
+      if (data.ok) { setResultado(data); setArchivos([]); onExito() }
+      else setError(data.error || 'Error al procesar los archivos')
+    } catch (e) { setError(String(e)) }
+    setCargando(false)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-start justify-center pt-8 px-4 overflow-y-auto">
+      <div className="bg-white rounded-lg shadow-2xl w-full max-w-xl mb-8">
+        <div className="px-8 py-6 bg-gradient-to-r from-[#0F2444] to-[#1A3458] rounded-t-lg flex items-center justify-between">
+          <div>
+            <div className="text-[10px] font-bold tracking-widest uppercase" style={{ color: '#C9A663' }}>Carga de Datos</div>
+            <h2 className="font-serif text-2xl font-semibold text-white mt-1">Cargar Reportes</h2>
+            <p className="text-xs text-slate-300 mt-1">AV (Cobro/Recordatorios) y Piso (Sigella)</p>
+          </div>
+          <button onClick={onCerrar} className="p-2 rounded-full hover:bg-white/10 transition-colors">
+            <X className="w-5 h-5 text-white" />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-5">
+          {/* Selector de mes */}
+          <div>
+            <label className="text-eyebrow block mb-2">Mes al que corresponden los archivos</label>
+            <select value={mesSeleccionado} onChange={e => setMesSeleccionado(e.target.value)}
+              className="w-full border border-[#B8924A]/30 rounded px-3 py-2.5 text-sm outline-none focus:border-[#B8924A] bg-[#FAF7F1] font-semibold"
+              style={{ color: '#0F2444' }}>
+              {meses.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+            </select>
+          </div>
+
+          {/* Zona de carga */}
+          <div>
+            <label className="text-eyebrow block mb-2">Seleccionar archivos</label>
+            <label className="flex flex-col items-center justify-center w-full h-28 border-2 border-dashed border-[#B8924A]/30 rounded-lg cursor-pointer hover:bg-[#FAF7F1]/50 transition-colors">
+              <Upload className="w-7 h-7 mb-2" style={{ color: '#B8924A' }} />
+              <span className="text-sm font-medium" style={{ color: '#0F2444' }}>Click para seleccionar archivos</span>
+              <span className="text-xs text-slate-400 mt-1">Puedes seleccionar varios a la vez</span>
+              <input type="file" multiple accept=".xlsx,.xls" className="hidden" onChange={agregarArchivos} />
+            </label>
+          </div>
+
+          {/* Lista de archivos seleccionados */}
+          {archivos.length > 0 && (
+            <div className="space-y-2">
+              <label className="text-eyebrow block">Archivos listos para cargar</label>
+              {archivos.map((f, i) => (
+                <div key={i} className="flex items-center gap-3 bg-[#FAF7F1] border border-[#B8924A]/15 rounded px-3 py-2.5">
+                  <span className="text-lg">{getIcono(f.name)}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium truncate" style={{ color: '#0F2444' }}>{f.name}</div>
+                    <div className="text-xs text-slate-400">{(f.size / 1024).toFixed(0)} KB</div>
+                  </div>
+                  <button onClick={() => quitarArchivo(i)} className="p-1 hover:bg-red-50 rounded transition-colors">
+                    <X className="w-4 h-4 text-red-400" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Guía de nombres */}
+          <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
+            <div className="text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">Nombres esperados de archivos</div>
+            <div className="space-y-1 text-xs font-mono text-slate-600">
+              <div><span className="text-blue-600">Reporte-Cobro-General-18-05-Corte-1.xlsx</span> → AV Cobro</div>
+              <div><span className="text-blue-600">Reporte-Recordatorios-General-18-05.xlsx</span> → AV Recordatorio</div>
+              <div><span className="text-blue-600">Reporte-Recordatorios-SURA-18-05.xlsx</span> → AV SURA</div>
+              <div><span className="text-green-600">Sigella-Gestiones-18-05-2026.xlsx</span> → Piso</div>
+            </div>
+          </div>
+
+          {/* Error */}
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded p-3 text-sm text-red-800 flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          {/* Resultado exitoso */}
+          {resultado && (
+            <div className="bg-emerald-50 border border-emerald-200 rounded p-4">
+              <div className="font-semibold text-emerald-800 mb-2 text-sm">✓ Carga completada</div>
+              <div className="space-y-1">
+                {resultado.resultados?.map((r: any, i: number) => (
+                  <div key={i} className="text-xs text-emerald-700">
+                    {r.ok ? `✓ ${r.archivo} — ${r.tipo === 'piso' ? `${r.gestiones?.toLocaleString()} gestiones piso` : `${r.minutos} min AV, ${r.gestiones} gestiones`}` : `✗ ${r.archivo}: ${r.error}`}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Botón cargar */}
+          <div className="flex items-center justify-end gap-3 pt-2">
+            <button onClick={onCerrar} className="px-4 py-2 text-sm text-slate-600 hover:text-slate-900">Cerrar</button>
+            <button onClick={cargar} disabled={!archivos.length || cargando}
+              className="flex items-center gap-2 px-6 py-2.5 rounded-sm text-sm font-semibold text-white transition-colors disabled:opacity-40"
+              style={{ background: '#0F2444' }}>
+              {cargando ? <><RefreshCw className="w-4 h-4 animate-spin" />Procesando...</> : <><Upload className="w-4 h-4" />Cargar archivos</>}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Formulario cierre de mes ──────────────────────────────────────────
 function FormularioCierreMes({ onGuardar, onCerrar }: { onGuardar: (datos: Record<string, { minutosAV: number; honorario: number; llamadas: number; efectivas: number; promesas: number }>) => void; onCerrar: () => void }) {
   const [datos, setDatos] = useState<Record<string, Record<string, string>>>({})
@@ -491,6 +643,7 @@ export default function Dashboard() {
   const [mesActualLocal, setMesActualLocal] = useState<MesData | null>(null)
   const [editMode, setEditMode] = useState(false)
   const [mostrarFormulario, setMostrarFormulario] = useState(false)
+  const [mostrarCarga, setMostrarCarga] = useState(false)
   const [lastUpdate, setLastUpdate] = useState('')
 
   const fetchData = useCallback(async (idx: number, mesEditado?: MesData) => {
@@ -548,6 +701,7 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen">
       {mostrarFormulario && <FormularioCierreMes onGuardar={guardarFormulario} onCerrar={() => setMostrarFormulario(false)} />}
+      {mostrarCarga && <PanelCargaArchivos mesActual={data?.mesActual?.mes || '2026-05'} onExito={() => { fetchData(mesIdx, mesActualLocal || undefined); setMostrarCarga(false) }} onCerrar={() => setMostrarCarga(false)} />}
 
       <header className="border-b border-[#B8924A]/20 sticky top-0 z-50 backdrop-blur-md bg-white/90">
         <div className="max-w-7xl mx-auto px-8">
@@ -566,6 +720,9 @@ export default function Dashboard() {
                   <ClipboardList className="w-3.5 h-3.5" />Registrar mes
                 </button>
               )}
+              <button onClick={() => setMostrarCarga(true)} className="flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-sm border transition-colors" style={{ borderColor: '#0F2444', color: '#0F2444' }}>
+                <Upload className="w-3.5 h-3.5" />Cargar archivos
+              </button>
               <button onClick={() => fetchData(mesIdx, mesActualLocal || undefined)} className="p-2.5 rounded-sm hover:bg-[#FAF7F1] transition-colors"><RefreshCw className="w-4 h-4" style={{ color: '#0F2444' }} /></button>
             </div>
           </div>
