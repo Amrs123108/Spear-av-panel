@@ -189,11 +189,11 @@ export const HISTORICO_INICIAL: MesData[] = [
 ]
 
 export const BOLSA_INICIAL: BolsaMinutos = {
-  saldoActual: 23029,
+  saldoActual: 21442,
   diaRecarga: 1,
   cantidadRecarga: 14000,
   historial: [
-    { fecha: "2026-05-01", tipo: "recarga",  cantidad: 14000, descripcion: "Recarga mensual Mayo 2026" },
+    { fecha: "2026-05-19", tipo: "recarga",  cantidad: 14000, descripcion: "Recarga mensual Mayo 2026" },
     { fecha: "2026-04-30", tipo: "consumo",  cantidad: 5653,  descripcion: "Consumo Abril 2026 (5,653 min)" },
     { fecha: "2026-04-01", tipo: "recarga",  cantidad: 14000, descripcion: "Recarga mensual Abril 2026" },
     { fecha: "2026-03-31", tipo: "consumo",  cantidad: 7276,  descripcion: "Consumo Marzo 2026 (7,276 min)" },

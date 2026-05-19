@@ -395,6 +395,12 @@ export async function POST(req: Request) {
 
     const mRef = datosActuales.historico[idxMes]
 
+    // Capturar minutos AV actuales ANTES de cualquier modificación
+    // Necesario para calcular la diferencia neta en modo reemplazar
+    const minutosAVAntesDelReemplazo = modo === 'reemplazar'
+      ? Object.values(mRef.carteras as Record<string, any>).reduce((s: number, c: any) => s + (c.minutosAV || 0), 0)
+      : 0
+
     // En modo REEMPLAZAR, limpiamos los datos operativos del mes ANTES de procesar
     // (conservamos el honorario que se ingresa manualmente — solo borramos lo que viene del Excel)
     if (modo === 'reemplazar') {
@@ -489,6 +495,39 @@ export async function POST(req: Request) {
       }
     }
 
+    // ── Actualizar la bolsa de minutos ────────────────────────────────
+    // Solo se descuenta cuando hay minutos AV nuevos y el modo es reemplazar
+    // En modo reemplazar: calculamos la diferencia entre los minutos nuevos y los anteriores
+    // En modo agregar: descontamos directamente los minutos del archivo
+    if (totalMinutosAV > 0) {
+      const minutosAnteriores = minutosAVAntesDelReemplazo
+      const minutosNuevos = Math.round(totalMinutosAV)
+      const diferencia = modo === 'reemplazar'
+        ? minutosNuevos - minutosAnteriores  // diferencia neta
+        : minutosNuevos                       // todos son nuevos
+
+      if (diferencia > 0) {
+        const bolsaAnterior = datosActuales.bolsa.saldoActual
+        datosActuales.bolsa.saldoActual = Math.max(0, bolsaAnterior - diferencia)
+        datosActuales.bolsa.historial.unshift({
+          fecha: new Date().toISOString().split('T')[0],
+          tipo: 'consumo',
+          cantidad: diferencia,
+          descripcion: `Consumo cargado — ${mes} (${diferencia.toLocaleString('es-PA')} min)`
+        })
+      } else if (diferencia < 0) {
+        // Modo reemplazar con menos minutos que antes — devolver a la bolsa
+        const devolucion = Math.abs(diferencia)
+        datosActuales.bolsa.saldoActual += devolucion
+        datosActuales.bolsa.historial.unshift({
+          fecha: new Date().toISOString().split('T')[0],
+          tipo: 'recarga',
+          cantidad: devolucion,
+          descripcion: `Ajuste por corrección — ${mes} (-${devolucion.toLocaleString('es-PA')} min)`
+        })
+      }
+    }
+
     // Recalcular totales del mes
     const carts = mRef.carteras
     mRef.minutosConsumidos = Object.values(carts).reduce((s: number, c: any) => s + (c.minutosAV || 0), 0)
@@ -507,6 +546,10 @@ export async function POST(req: Request) {
         nota: modo === 'reemplazar'
           ? 'Los datos anteriores del mes fueron reemplazados por este archivo.'
           : 'Los datos fueron sumados a los existentes.',
+      },
+      bolsa: {
+        saldoActual: datosActuales.bolsa.saldoActual,
+        minutosDescontados: Math.round(totalMinutosAV),
       }
     })
   } catch (e) {

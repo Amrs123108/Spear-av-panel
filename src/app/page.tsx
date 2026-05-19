@@ -495,13 +495,24 @@ function PanelCargaArchivos({ mesActual, onExito, onCerrar }: {
           {resultado && (
             <div className="bg-emerald-50 border border-emerald-200 rounded p-4">
               <div className="font-semibold text-emerald-800 mb-2 text-sm">✓ Carga completada</div>
-              <div className="space-y-1">
+              <div className="space-y-1 mb-3">
                 {resultado.resultados?.map((r: any, i: number) => (
                   <div key={i} className="text-xs text-emerald-700">
-                    {r.ok ? `✓ ${r.archivo} — ${r.tipo === 'piso' ? `${r.gestiones?.toLocaleString()} gestiones piso` : `${r.minutos} min AV, ${r.gestiones} gestiones`}` : `✗ ${r.archivo}: ${r.error}`}
+                    {r.ok
+                      ? `✓ ${r.archivo} — ${r.tipo === 'piso' ? `${r.gestiones?.toLocaleString()} gestiones piso` : `${r.minutos?.toLocaleString()} min AV, ${r.gestiones?.toLocaleString()} gestiones`}`
+                      : `✗ ${r.archivo}: ${r.error}`}
                   </div>
                 ))}
               </div>
+              {resultado.bolsa && (
+                <div className="pt-3 border-t border-emerald-200 flex items-center justify-between">
+                  <span className="text-xs text-emerald-700 font-semibold">Bolsa de minutos actualizada</span>
+                  <div className="text-right">
+                    <div className="text-sm font-bold text-emerald-800">{resultado.bolsa.saldoActual?.toLocaleString('es-PA')} min disponibles</div>
+                    <div className="text-[10px] text-emerald-600">−{resultado.bolsa.minutosDescontados?.toLocaleString('es-PA')} min descontados</div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
