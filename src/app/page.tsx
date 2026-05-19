@@ -355,6 +355,7 @@ function PanelCargaArchivos({ mesActual, onExito, onCerrar }: {
   const [cargando, setCargando] = useState(false)
   const [resultado, setResultado] = useState<any>(null)
   const [error, setError] = useState('')
+  const [modo, setModo] = useState<'reemplazar' | 'agregar'>('reemplazar')
 
   const meses = [
     { value: '2026-05', label: 'MAY 2026 (actual)' },
@@ -388,6 +389,7 @@ function PanelCargaArchivos({ mesActual, onExito, onCerrar }: {
       const fd = new FormData()
       archivos.forEach(f => fd.append('archivos', f))
       fd.append('mes', mesSeleccionado)
+      fd.append('modo', modo)
       const res = await fetch('/api/upload-excel', { method: 'POST', body: fd })
       const data = await res.json()
       if (data.ok) { setResultado(data); setArchivos([]); onExito() }
@@ -411,6 +413,25 @@ function PanelCargaArchivos({ mesActual, onExito, onCerrar }: {
         </div>
 
         <div className="p-6 space-y-5">
+          {/* Selector de modo */}
+          <div>
+            <label className="text-eyebrow block mb-2">¿Cómo quieres cargar los datos?</label>
+            <div className="grid grid-cols-2 gap-3">
+              <button onClick={() => setModo('reemplazar')}
+                className={`p-3 rounded border-2 text-left transition-all ${modo === 'reemplazar' ? 'border-[#0F2444] bg-[#FAF7F1]' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
+                <div className="text-sm font-semibold" style={{ color: '#0F2444' }}>🔄 Reemplazar</div>
+                <div className="text-xs text-slate-500 mt-1 leading-relaxed">El archivo tiene todos los datos del mes hasta hoy. Reemplaza lo anterior.</div>
+                <div className="text-[10px] font-semibold mt-2" style={{ color: '#B8924A' }}>Recomendado si subes el consolidado</div>
+              </button>
+              <button onClick={() => setModo('agregar')}
+                className={`p-3 rounded border-2 text-left transition-all ${modo === 'agregar' ? 'border-[#0F2444] bg-[#FAF7F1]' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
+                <div className="text-sm font-semibold" style={{ color: '#0F2444' }}>➕ Agregar</div>
+                <div className="text-xs text-slate-500 mt-1 leading-relaxed">El archivo tiene solo datos nuevos (el día de ayer). Se suma a lo existente.</div>
+                <div className="text-[10px] font-semibold mt-2 text-slate-400">Si subes solo el día nuevo</div>
+              </button>
+            </div>
+          </div>
+
           {/* Selector de mes */}
           <div>
             <label className="text-eyebrow block mb-2">Mes al que corresponden los archivos</label>

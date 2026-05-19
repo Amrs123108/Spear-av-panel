@@ -378,17 +378,46 @@ export async function POST(req: Request) {
   try {
     const formData = await req.formData()
     const archivos = formData.getAll('archivos') as File[]
-    const mes = formData.get('mes') as string // "2026-05"
+    const mes = formData.get('mes') as string
+    // modo: 'reemplazar' (default) | 'agregar'
+    // reemplazar = el archivo ES la verdad completa del mes hasta esa fecha
+    // agregar    = el archivo contiene SOLO los datos nuevos (no incluye días anteriores)
+    const modo = (formData.get('modo') as string) || 'reemplazar'
 
     if (!archivos?.length) return NextResponse.json({ ok: false, error: 'No se recibieron archivos' }, { status: 400 })
     if (!mes) return NextResponse.json({ ok: false, error: 'Falta el mes (formato: 2026-05)' }, { status: 400 })
 
-    // Leer datos actuales del Blob
     const datosActuales = await leerBlob()
     if (!datosActuales) return NextResponse.json({ ok: false, error: 'Blob no inicializado. Abre /api/save primero.' }, { status: 400 })
 
     const idxMes = datosActuales.historico.findIndex((m: any) => m.mes === mes)
     if (idxMes < 0) return NextResponse.json({ ok: false, error: `Mes ${mes} no existe en el histórico` }, { status: 404 })
+
+    const mRef = datosActuales.historico[idxMes]
+
+    // En modo REEMPLAZAR, limpiamos los datos operativos del mes ANTES de procesar
+    // (conservamos el honorario que se ingresa manualmente — solo borramos lo que viene del Excel)
+    if (modo === 'reemplazar') {
+      // Saber qué tipos de archivos vienen para saber qué limpiar
+      const tiposArchivos = archivos.map(a => detectarArchivo(a.name).tipo)
+      const tieneAV = tiposArchivos.some(t => t === 'av_cobro' || t === 'av_recordatorio')
+      const tienePiso = tiposArchivos.some(t => t === 'piso')
+
+      if (tieneAV) {
+        // Limpiar minutos y gestiones AV de todas las carteras (preservar honorario)
+        Object.keys(mRef.carteras).forEach(cartera => {
+          mRef.carteras[cartera].minutosAV = 0
+          mRef.carteras[cartera].llamadas = 0
+          mRef.carteras[cartera].efectivas = 0
+          mRef.carteras[cartera].promesas = 0
+        })
+      }
+
+      if (tienePiso) {
+        // Limpiar todas las gestiones del piso
+        mRef.gestionesPiso = {}
+      }
+    }
 
     const resultados: any[] = []
     let totalMinutosAV = 0
@@ -398,7 +427,6 @@ export async function POST(req: Request) {
     for (const archivo of archivos) {
       const info = detectarArchivo(archivo.name)
 
-      // Leer el Excel
       const buffer = await archivo.arrayBuffer()
       const wb = XLSX.read(buffer, { type: 'array', cellDates: true })
       const ws = wb.Sheets[wb.SheetNames[0]]
@@ -410,9 +438,7 @@ export async function POST(req: Request) {
       }
 
       if (info.tipo === 'piso') {
-        // Procesar Sigella
         const resumen = procesarPiso(rows)
-        const mRef = datosActuales.historico[idxMes]
         if (!mRef.gestionesPiso) mRef.gestionesPiso = {}
 
         Object.entries(resumen).forEach(([cartera, vals]: [string, any]) => {
@@ -429,13 +455,12 @@ export async function POST(req: Request) {
           if (vals.totalAsesores > p.totalAsesores) p.totalAsesores = vals.totalAsesores
         })
 
-        totalGestionesPiso += Object.values(resumen).reduce((s: number, v: any) => s + v.llamadas, 0)
-        resultados.push({ archivo: archivo.name, tipo: 'piso', ok: true, carteras: Object.keys(resumen).length, gestiones: totalGestionesPiso })
+        const gestPiso = Object.values(resumen).reduce((s: number, v: any) => s + v.llamadas, 0)
+        totalGestionesPiso += gestPiso
+        resultados.push({ archivo: archivo.name, tipo: 'piso', ok: true, modo, carteras: Object.keys(resumen).length, gestiones: gestPiso })
 
       } else if (info.tipo === 'av_cobro' || info.tipo === 'av_recordatorio') {
-        // Procesar AV
         const resumen = procesarAV(rows, info)
-        const mRef = datosActuales.historico[idxMes]
 
         Object.entries(resumen).forEach(([cartera, vals]) => {
           if (!mRef.carteras[cartera]) {
@@ -454,36 +479,34 @@ export async function POST(req: Request) {
         totalGestionesAV += gests
 
         resultados.push({
-          archivo: archivo.name, tipo: info.tipo, ok: true,
+          archivo: archivo.name, tipo: info.tipo, ok: true, modo,
           carteraEspecifica: info.carteraEspecifica,
           carteras: Object.keys(resumen).length,
           minutos: Math.round(mins), gestiones: gests
         })
       } else {
-        resultados.push({ archivo: archivo.name, ok: false, error: 'Tipo de archivo no reconocido. Verifica el nombre.' })
+        resultados.push({ archivo: archivo.name, ok: false, error: 'Tipo no reconocido. Verifica el nombre del archivo.' })
       }
     }
 
     // Recalcular totales del mes
-    const carts = datosActuales.historico[idxMes].carteras
-    datosActuales.historico[idxMes].minutosConsumidos =
-      Object.values(carts).reduce((s: number, c: any) => s + (c.minutosAV || 0), 0)
-    datosActuales.historico[idxMes].honorarioTotal =
-      Object.values(carts).reduce((s: number, c: any) => s + (c.honorario || 0), 0)
+    const carts = mRef.carteras
+    mRef.minutosConsumidos = Object.values(carts).reduce((s: number, c: any) => s + (c.minutosAV || 0), 0)
+    mRef.honorarioTotal = Object.values(carts).reduce((s: number, c: any) => s + (c.honorario || 0), 0)
 
-    // Guardar en Blob
     await escribirBlob(datosActuales)
 
     return NextResponse.json({
-      ok: true,
-      mes,
+      ok: true, mes, modo,
       resultados,
       resumen: {
         archivosProcessados: resultados.filter(r => r.ok).length,
         archivosFallidos: resultados.filter(r => !r.ok).length,
         totalMinutosAV: Math.round(totalMinutosAV),
-        totalGestionesAV,
-        totalGestionesPiso,
+        totalGestionesAV, totalGestionesPiso,
+        nota: modo === 'reemplazar'
+          ? 'Los datos anteriores del mes fueron reemplazados por este archivo.'
+          : 'Los datos fueron sumados a los existentes.',
       }
     })
   } catch (e) {
@@ -491,3 +514,4 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: String(e) }, { status: 500 })
   }
 }
+
