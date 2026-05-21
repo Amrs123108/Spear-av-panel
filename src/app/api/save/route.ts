@@ -1,22 +1,19 @@
 import { NextResponse } from 'next/server'
-import { put, list, getDownloadUrl } from '@vercel/blob'
+import { put, list, get } from '@vercel/blob'
 import { HISTORICO_INICIAL, CARTERAS_CONFIG, BOLSA_INICIAL, PLAN_INICIAL, COSTO_FIJO_MENSUAL_AV, COSTO_PISO_ASESOR } from '@/lib/store'
 
 export const dynamic = 'force-dynamic'
 const PATHNAME = 'spear-av-datos.json'
 
-// ── Leer datos del Blob (acceso privado) ─────────────────────────────
+// ── Leer datos del Blob (usa get() para acceso privado desde servidor) ──
 async function leerBlob(): Promise<any | null> {
   try {
-    const { blobs } = await list({ prefix: PATHNAME })
+    const { blobs } = await list({ prefix: PATHNAME, limit: 1 })
     if (!blobs || blobs.length === 0) return null
-
-    const blob = blobs[0]
-    // Con acceso privado usamos downloadUrl
-    const downloadUrl = await getDownloadUrl(blob.url)
-    const res = await fetch(downloadUrl, { cache: 'no-store' })
-    if (!res.ok) return null
-    return await res.json()
+    const blobObj = await get(blobs[0].url)
+    if (!blobObj) return null
+    const texto = await blobObj.text()
+    return JSON.parse(texto)
   } catch (e) {
     console.error('Error leyendo blob:', e)
     return null

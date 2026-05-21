@@ -1,23 +1,25 @@
 // lib/blob.ts
-// Helper centralizado para leer y escribir en Vercel Blob (acceso privado)
-import { put, list, getDownloadUrl, head } from '@vercel/blob'
+// Helper para leer y escribir en Vercel Blob (acceso privado)
+// Usa get() para leer desde servidor — NO getDownloadUrl() que es solo para navegador
+import { put, list, get } from '@vercel/blob'
 
 export const BLOB_FILENAME = 'spear-av-datos.json'
 
 export async function leerBlobDatos(): Promise<any | null> {
   try {
-    // Método 1: buscar con list
+    // Buscar el archivo con list para obtener la URL
     const { blobs } = await list({ prefix: BLOB_FILENAME, limit: 1 })
-    
-    if (blobs && blobs.length > 0) {
-      // Blob privado — necesitamos downloadUrl para leer
-      const url = await getDownloadUrl(blobs[0].url)
-      const res = await fetch(url, { cache: 'no-store' })
-      if (res.ok) {
-        const data = await res.json()
-        if (data && data.historico) return data
-      }
-    }
+    if (!blobs || blobs.length === 0) return null
+
+    // Usar get() — correcto para acceso privado desde servidor
+    const blob = await get(blobs[0].url)
+    if (!blob) return null
+
+    // blob es un objeto Blob — leer como texto y parsear
+    const texto = await blob.text()
+    const data = JSON.parse(texto)
+
+    if (data && data.historico && data.historico.length > 0) return data
     return null
   } catch (e) {
     console.error('[Blob] Error leyendo:', e)
