@@ -1,26 +1,12 @@
 import { NextResponse } from 'next/server'
-import { list, getDownloadUrl } from '@vercel/blob'
+import { leerBlobDatos } from '@/lib/blob'
 import { HISTORICO_INICIAL, CARTERAS_CONFIG, BOLSA_INICIAL, PLAN_INICIAL, COSTO_FIJO_MENSUAL_AV, COSTO_PISO_ASESOR } from '@/lib/store'
 import { calcularValorAV } from '@/lib/valorAV'
 
 export const dynamic = 'force-dynamic'
-const PATHNAME = 'spear-av-datos.json'
-
-async function leerBlob(): Promise<any | null> {
-  try {
-    const { blobs } = await list({ prefix: PATHNAME })
-    if (!blobs || blobs.length === 0) return null
-    const downloadUrl = await getDownloadUrl(blobs[0].url)
-    const res = await fetch(downloadUrl, { cache: 'no-store' })
-    if (!res.ok) return null
-    return await res.json()
-  } catch (e) {
-    return null
-  }
-}
 
 async function obtenerDatos() {
-  const blob = await leerBlob()
+  const blob = await leerBlobDatos()
   if (blob?.historico?.length > 0) {
     return { fuente: 'blob' as const, ...blob }
   }
@@ -29,7 +15,11 @@ async function obtenerDatos() {
     historico: HISTORICO_INICIAL,
     bolsa: BOLSA_INICIAL,
     plan: PLAN_INICIAL,
-    configuracion: { carteras: CARTERAS_CONFIG, costoFijoMensualAV: COSTO_FIJO_MENSUAL_AV, costoPisoAsesor: COSTO_PISO_ASESOR }
+    configuracion: {
+      carteras: CARTERAS_CONFIG,
+      costoFijoMensualAV: COSTO_FIJO_MENSUAL_AV,
+      costoPisoAsesor: COSTO_PISO_ASESOR
+    }
   }
 }
 
@@ -64,7 +54,6 @@ function calcular(datos: any, mesIdxParam: number) {
   const mesActual = historico[mesIdx]
   const mesAnterior = mesIdx > 0 ? historico[mesIdx - 1] : null
 
-  // Base histórica sin AV
   const bases: Record<string, number> = {}
   carteras.forEach((c: any) => {
     const vals = historico
@@ -95,11 +84,9 @@ function calcular(datos: any, mesIdxParam: number) {
     const invAV = mesActual.minutosConsumidos > 0 ? (a.minutosAV / mesActual.minutosConsumidos) * costoFijo : 0
     const costoP = c.asesores * costoPiso
     const pct = a.honorario > 0 ? (invAV / a.honorario) * 100 : 0
-    // Corrección: redondear % de comisión para evitar floating point
     const comisionPct = parseFloat((c.honorarioPct * 100).toFixed(4))
     const pts = parseFloat((comisionPct * (pct / 100)).toFixed(4))
     const valorAV = calcularValorAV(c.nombre, c.clientes, c.asesores, a.minutosAV, a.llamadas, a.efectivas, a.promesas, a.honorario, invAV)
-    // Datos del piso si existen
     const piso = mesActual.gestionesPiso?.[c.nombre] || null
 
     let semaforo = 'amarillo', motivo = '', accion = ''
@@ -123,8 +110,7 @@ function calcular(datos: any, mesIdxParam: number) {
       puntosComisionAlAV: pts,
       semaforo, motivo, accion,
       pctCobertura: a.llamadas > 0 ? parseFloat((a.llamadas / c.clientes * 100).toFixed(1)) : 0,
-      valorAV,
-      piso, // datos del piso si ya se cargaron
+      valorAV, piso,
     }
   })
 
@@ -136,8 +122,8 @@ function calcular(datos: any, mesIdxParam: number) {
   return {
     mesActualIdx: mesIdx, estadoMes,
     mensajeEstado: estadoMes === 'minutos_sin_honorario'
-      ? `El AV consumió ${mesActual.minutosConsumidos.toLocaleString()} min este mes. Honorario pendiente de cierre.`
-      : estadoMes === 'vacio' ? 'Sin datos registrados para este mes.' : null,
+      ? `El AV consumió ${mesActual.minutosConsumidos.toLocaleString()} min. Honorario pendiente.`
+      : estadoMes === 'vacio' ? 'Sin datos para este mes.' : null,
     mesActual: {
       mes: mesActual.mes, label: mesActual.label,
       esMesActual: mesActual.esMesActual || false,
