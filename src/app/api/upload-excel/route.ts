@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import * as XLSX from 'xlsx'
-import { put, list, get } from '@vercel/blob'
+import { put, list } from '@vercel/blob'
 
 export const dynamic = 'force-dynamic'
 const PATHNAME = 'spear-av-datos.json'
@@ -356,15 +356,19 @@ function procesarPiso(rows: any[][]) {
   return resultado
 }
 
-// ── Leer Blob (usa get() para acceso privado desde servidor) ─────────
+// ── Leer Blob (fetch con Authorization para acceso privado) ──────────
 async function leerBlob(): Promise<any | null> {
   try {
+    const token = process.env.BLOB_READ_WRITE_TOKEN
+    if (!token) return null
     const { blobs } = await list({ prefix: PATHNAME, limit: 1 })
     if (!blobs?.length) return null
-    const blobObj = await get(blobs[0].url)
-    if (!blobObj) return null
-    const texto = await blobObj.text()
-    return JSON.parse(texto)
+    const res = await fetch(blobs[0].url, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: 'no-store',
+    })
+    if (!res.ok) return null
+    return await res.json()
   } catch (e) { return null }
 }
 

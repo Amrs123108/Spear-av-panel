@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { list, get } from '@vercel/blob'
+import { list } from '@vercel/blob'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,7 +14,7 @@ export async function GET() {
   })
   if (!token) return NextResponse.json(resultado)
 
-  // Paso 2: listar
+  // Paso 2: listar blobs
   try {
     const { blobs } = await list()
     resultado.pasos.push({
@@ -30,18 +30,24 @@ export async function GET() {
     const archivo = blobs.find(b => b.pathname === 'spear-av-datos.json')
     resultado.pasos.push({
       paso: '3_buscar', ok: !!archivo,
-      detalle: archivo ? `Encontrado (${archivo.size} bytes)` : `No encontrado. Disponibles: ${blobs.map(b => b.pathname).join(', ')}`
+      detalle: archivo
+        ? `Encontrado (${archivo.size} bytes)`
+        : `No encontrado. Disponibles: ${blobs.map(b => b.pathname).join(', ')}`
     })
     if (!archivo) return NextResponse.json(resultado)
 
-    // Paso 4: leer con get()
-    const blobObj = await get(archivo.url)
-    resultado.pasos.push({ paso: '4_get', ok: !!blobObj, tipo: typeof blobObj })
-    if (!blobObj) return NextResponse.json(resultado)
+    // Paso 4: leer con Authorization header
+    const res = await fetch(archivo.url, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: 'no-store',
+    })
+    resultado.pasos.push({
+      paso: '4_fetch', ok: res.ok, status: res.status
+    })
+    if (!res.ok) return NextResponse.json(resultado)
 
     // Paso 5: parsear
-    const texto = await blobObj.text()
-    const data = JSON.parse(texto)
+    const data = await res.json()
     resultado.pasos.push({
       paso: '5_parse', ok: true,
       meses: data.historico?.length,
