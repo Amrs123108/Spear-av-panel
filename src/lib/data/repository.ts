@@ -72,33 +72,12 @@ export async function obtenerMesCerrado(mes: string): Promise<DashboardData | nu
 }
 
 // Productividad de asesores — desde gestionesPiso del mes
-export async function obtenerProductividad(mes: string): Promise<ProductividadAsesor[]> {
+export async function obtenerProductividad(mes: string): Promise<any[]> {
   const blob = await leerBlob()
   const raw = blob ?? obtenerDatosLocales()
-
-  const mesData = raw.historico?.find((m: MesHistorico) => m.mes === mes)
-  if (!mesData?.gestionesPiso) return []
-
-  const resultado: ProductividadAsesor[] = []
-  // Cuando tengamos Sigella integrado, esto vendrá de gestionesPiso con detalle por asesor
-  // Por ahora retorna los agregados disponibles
-  Object.entries(mesData.gestionesPiso).forEach(([cartera, datos]: [string, any]) => {
-    if (datos.totalAsesores > 0) {
-      resultado.push({
-        asesor: `Equipo ${cartera}`,
-        cartera,
-        gestiones: datos.llamadas,
-        efectivas: datos.efectivas,
-        promesas: datos.promesas,
-        monto: datos.montoPrometido,
-        tmoMin: datos.tiempoPromedioMin,
-        diasActivo: 22, // días hábiles estimados
-        gestionesPorDia: datos.totalAsesores > 0 ? Math.round(datos.llamadas / (datos.totalAsesores * 22)) : 0,
-      })
-    }
-  })
-
-  return resultado
+  const mesData = raw.historico?.find((m: any) => m.mes === mes)
+  // Leer directamente el array de productividad guardado por el procesador de Sigella
+  return mesData?.productividadAsesores || []
 }
 
 // Escribir datos al Blob — usado por /admin

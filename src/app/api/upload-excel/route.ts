@@ -50,8 +50,19 @@ const MAPA_PROYECTO_PISO: Record<string, string> = {
 
 // ── Mapeo del AV: empresa_cliente puede tener variaciones ─────────────
 const MAPA_EMPRESA_AV: Record<string, string> = {
+  // Banistmo — todas las variaciones posibles del reporte AV
   'BANISTMO ACTIVA': 'BANISTMO ACTIVA',
+  'BANISTMO ACTIVA PREDICTIVO': 'BANISTMO ACTIVA',
+  'BANISTMO ACTIVA 61 A 90': 'BANISTMO ACTIVA',
   'BANISTMO RECOVERY': 'BANISTMO RECOVERY',
+  'BANISTMO S.A.': 'BANISTMO RECOVERY',
+  'BANISTMO S.A': 'BANISTMO RECOVERY',
+  'BANISTMO SA': 'BANISTMO RECOVERY',
+  // "Banistmo" solo sin sufijo → RECOVERY (cartera de cobro/castigo)
+  'BANISTMO': 'BANISTMO RECOVERY',
+  'Banistmo': 'BANISTMO RECOVERY',
+  'banistmo': 'BANISTMO RECOVERY',
+  // Resto
   'SURA': 'SURA',
   'TIGO': 'TIGO',
   'KREDIYA': 'KREDIYA',
@@ -188,13 +199,23 @@ function procesarAV(rows: any[][], info: InfoArchivo) {
     const fila = rows[i]
     if (!fila || fila.every((c: any) => !c)) continue
 
-    // Determinar cartera
+    // Determinar cartera — búsqueda robusta: exacta, luego uppercase, luego trim
     let empresa = ''
     if (info.carteraEspecifica) {
       empresa = info.carteraEspecifica
     } else if (cEmpresa >= 0) {
-      const raw = String(fila[cEmpresa] || '').trim()
-      empresa = MAPA_EMPRESA_AV[raw] || raw.toUpperCase()
+      // Normalización agresiva — elimina todos los tipos de espacios incluyendo \u00A0
+      const rawOriginal = String(fila[cEmpresa] || '')
+        .replace(/^\s+|\s+$/g, '')
+        .replace(/\u00A0/g, ' ')
+        .replace(/\t/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+      // Buscar: exacto → uppercase → lowercase → fallback uppercase
+      empresa = MAPA_EMPRESA_AV[rawOriginal]
+        || MAPA_EMPRESA_AV[rawOriginal.toUpperCase()]
+        || MAPA_EMPRESA_AV[rawOriginal.toLowerCase()]
+        || rawOriginal.toUpperCase()
     }
     if (!empresa) continue
 
@@ -326,22 +347,17 @@ function procesarAV(rows: any[][], info: InfoArchivo) {
 }
 
 // ── Procesar archivo del PISO (Sigella) ──────────────────────────────
+// Extrae totales por cartera Y productividad individual por asesor
 function procesarPiso(rows: any[][]) {
   const headers = rows[0].map(String)
 
-  // Columnas Sigella: ASESOR, CLASIFICACION, FECHA_CLAS, HORA, MONTO, FECHA, OBS, ESTADO, TIPO_DE_TRAMITE, TELEFONO, PROYECTO
-  const cAsesor = col(headers, 'asesor')
-  const cClasif = col(headers, 'clasificacion')
-  const cMonto = col(headers, 'monto')
-  const cHora = col(headers, 'hora')
-  const cFecha = col(headers, 'fecha_clas', 'fecha')
+  const cAsesor   = col(headers, 'asesor')
+  const cClasif   = col(headers, 'clasificacion')
+  const cMonto    = col(headers, 'monto')
+  const cHora     = col(headers, 'hora')
+  const cFecha    = col(headers, 'fecha_clas', 'fecha')
   const cProyecto = col(headers, 'proyecto')
-  const cEstado = col(headers, 'estado')
 
-  // Leer tabla de tipo de verificación de la Hoja3 si existe en el mismo archivo
-  // Por ahora usamos el mapa hardcodeado basado en lo que leímos
-
-  // Mapa de clasificaciones PISO → tipo (hardcoded de Hoja3)
   const CLASIF_PISO_MAP: Record<string, 'promesa' | 'efectiva' | 'no_efectiva'> = {
     'PROMESAS DE PAGOS >': 'promesa',
     'CONDONACION A PLAZOS >': 'promesa',
@@ -367,7 +383,6 @@ function procesarPiso(rows: any[][]) {
     'PROMESA DE PAGO VCDO >': 'promesa',
     'PROMESA DE PAGO - VISITA >': 'promesa',
     'PROMESA DE PAGO CON REAGING >': 'promesa',
-    // EFECTIVAS
     'DICE YA PAGÓ >': 'efectiva',
     'DICE YA PAGO >': 'efectiva',
     'CLIENTE YA CANCELO >': 'efectiva',
@@ -395,82 +410,151 @@ function procesarPiso(rows: any[][]) {
     'SI CONTACTO > CLIENTE CONFIRMA PAGO': 'efectiva',
   }
 
-  type ResumenPiso = {
+  // Totales por cartera
+  type ResumenCartera = {
     llamadas: number; efectivas: number; promesas: number
     montoPrometido: number; noEfectivas: number
-    horasGestion: number[]; asesores: Set<string>
+    intervalosGestion: number[]; asesoresSet: Set<string>
   }
+  const porCartera: Record<string, ResumenCartera> = {}
 
-  const resumen: Record<string, ResumenPiso> = {}
+  // Totales por asesor (para tabla de productividad)
+  type ResumenAsesor = {
+    cartera: string; gestiones: number; efectivas: number
+    promesas: number; monto: number; noEfectivas: number
+    fechasActivo: Set<string>
+    intervalosGestion: number[]
+  }
+  const porAsesor: Record<string, ResumenAsesor> = {}
+
+  // Para calcular TMO: guardamos la hora anterior por asesor+cartera+día
   const horaAnterior: Record<string, { hora: Date; fecha: string }> = {}
 
   for (let i = 1; i < rows.length; i++) {
     const fila = rows[i]
-    if (!fila || fila.every(c => !c)) continue
+    if (!fila || fila.every((c: any) => !c)) continue
 
-    // Normalizar proyecto → cartera estándar
-    const proyBruto = String(fila[cProyecto] || '').trim().toUpperCase()
+    // ── Normalizar nombre de cartera ──────────────────────────────────
+    // Usa regex \s que captura TODOS los tipos de espacio:
+    // espacio normal, tab, non-breaking space (\u00A0), etc.
+    const proyBruto = String(fila[cProyecto] || '')
+      .replace(/^\s+|\s+$/g, '')   // trim de cualquier espacio al inicio/final
+      .replace(/\s+/g, ' ')        // normalizar espacios internos múltiples
+      .replace(/\u00A0/g, ' ')     // non-breaking space → espacio normal
+      .replace(/\t/g, ' ')         // tabs → espacio
+      .toUpperCase()
+      .trim()                      // trim final por si acaso
     const cartera = MAPA_PROYECTO_PISO[proyBruto] || proyBruto
-    if (!cartera) continue
-
-    if (!resumen[cartera]) {
-      resumen[cartera] = { llamadas: 0, efectivas: 0, promesas: 0, montoPrometido: 0, noEfectivas: 0, horasGestion: [], asesores: new Set() }
-    }
-    const r = resumen[cartera]
-    r.llamadas += 1
+    if (!cartera || cartera === '') continue
 
     const asesor = String(fila[cAsesor] || '').trim()
-    if (asesor) r.asesores.add(asesor)
-
     const clasificacion = String(fila[cClasif] || '').trim()
-    const tipo = CLASIF_PISO_MAP[clasificacion] ||
-      (clasificacion.toLowerCase().includes('promesa') || clasificacion.includes('PROMESA') ? 'promesa' :
-       clasificacion.toLowerCase().includes('no atend') || clasificacion.toLowerCase().includes('apagado') ||
-       clasificacion.toLowerCase().includes('ocupado') || clasificacion.toLowerCase().includes('no contesta') ? 'no_efectiva' : 'efectiva')
+    const fechaRaw = cFecha >= 0 ? fila[cFecha] : null
+    const horaRaw = cHora >= 0 ? fila[cHora] : null
+    const fechaStr = fechaRaw
+      ? (fechaRaw instanceof Date ? fechaRaw.toISOString().split('T')[0] : String(fechaRaw).split('T')[0])
+      : ''
 
-    if (tipo === 'promesa') {
-      r.promesas += 1
-      r.efectivas += 1
-      const monto = cMonto >= 0 ? (parseFloat(String(fila[cMonto] || '0').replace(/[B/. ]/g, '').replace(',', '.')) || 0) : 0
-      r.montoPrometido += monto
-    } else if (tipo === 'efectiva') {
-      r.efectivas += 1
-    } else {
-      r.noEfectivas += 1
+    const tipo: 'promesa' | 'efectiva' | 'no_efectiva' = CLASIF_PISO_MAP[clasificacion] || (
+      clasificacion.toLowerCase().includes('promesa') ? 'promesa' :
+      clasificacion.toLowerCase().includes('no atend') ||
+      clasificacion.toLowerCase().includes('apagado') ||
+      clasificacion.toLowerCase().includes('no contest') ||
+      clasificacion.toLowerCase().includes('ocupado') ||
+      clasificacion.toLowerCase().includes('numero equivoc') ? 'no_efectiva' : 'efectiva'
+    )
+
+    const monto = (tipo === 'promesa' && cMonto >= 0)
+      ? (parseFloat(String(fila[cMonto] || '0').replace(/[B/.\s]/g, '').replace(',', '.')) || 0)
+      : 0
+
+    // ── Acumular por cartera ──────────────────────────────────────────
+    if (!porCartera[cartera]) {
+      porCartera[cartera] = { llamadas: 0, efectivas: 0, promesas: 0, montoPrometido: 0, noEfectivas: 0, intervalosGestion: [], asesoresSet: new Set() }
+    }
+    const rc = porCartera[cartera]
+    rc.llamadas += 1
+    if (asesor) rc.asesoresSet.add(asesor)
+    if (tipo === 'promesa') { rc.promesas += 1; rc.efectivas += 1; rc.montoPrometido += monto }
+    else if (tipo === 'efectiva') rc.efectivas += 1
+    else rc.noEfectivas += 1
+
+    // ── Acumular por asesor ───────────────────────────────────────────
+    if (asesor) {
+      const keyAsesor = `${asesor}||${cartera}`
+      if (!porAsesor[keyAsesor]) {
+        porAsesor[keyAsesor] = { cartera, gestiones: 0, efectivas: 0, promesas: 0, monto: 0, noEfectivas: 0, fechasActivo: new Set(), intervalosGestion: [] }
+      }
+      const ra = porAsesor[keyAsesor]
+      ra.gestiones += 1
+      if (fechaStr) ra.fechasActivo.add(fechaStr)
+      if (tipo === 'promesa') { ra.promesas += 1; ra.efectivas += 1; ra.monto += monto }
+      else if (tipo === 'efectiva') ra.efectivas += 1
+      else ra.noEfectivas += 1
     }
 
-    // Calcular tiempo entre gestiones del mismo asesor
-    if (cHora >= 0 && cFecha >= 0 && asesor) {
-      const hora = fila[cHora]
-      const fecha = fila[cFecha]
-      const key = `${asesor}__${cartera}`
-      if (hora instanceof Date && fecha) {
-        const fechaStr = String(fecha).split('T')[0]
-        if (horaAnterior[key] && horaAnterior[key].fecha === fechaStr) {
-          const diff = (hora.getTime() - horaAnterior[key].hora.getTime()) / 60000
-          if (diff > 0 && diff < 60) r.horasGestion.push(diff)
+    // ── Calcular TMO con columna HORA ─────────────────────────────────
+    if (horaRaw && asesor && fechaStr) {
+      let horaDate: Date | null = null
+      if (horaRaw instanceof Date) {
+        horaDate = horaRaw
+      } else if (typeof horaRaw === 'string') {
+        const p = horaRaw.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/)
+        if (p) { horaDate = new Date(); horaDate.setHours(+p[1], +p[2], +(p[3] || 0), 0) }
+      }
+
+      if (horaDate) {
+        const key = `${asesor}__${cartera}__${fechaStr}`
+        if (horaAnterior[key]) {
+          const diff = (horaDate.getTime() - horaAnterior[key].hora.getTime()) / 60000
+          if (diff > 0 && diff < 60) {
+            porCartera[cartera].intervalosGestion.push(diff)
+            if (asesor && porAsesor[`${asesor}||${cartera}`]) {
+              porAsesor[`${asesor}||${cartera}`].intervalosGestion.push(diff)
+            }
+          }
         }
-        horaAnterior[key] = { hora, fecha: fechaStr }
+        horaAnterior[key] = { hora: horaDate, fecha: fechaStr }
       }
     }
   }
 
-  // Calcular tiempo promedio y serializar
-  const resultado: Record<string, any> = {}
-  Object.entries(resumen).forEach(([cartera, r]) => {
-    resultado[cartera] = {
-      llamadas: r.llamadas,
-      efectivas: r.efectivas,
-      promesas: r.promesas,
-      montoPrometido: Math.round(r.montoPrometido),
-      noEfectivas: r.noEfectivas,
-      tiempoPromedioMin: r.horasGestion.length > 0
-        ? parseFloat((r.horasGestion.reduce((a, b) => a + b, 0) / r.horasGestion.length).toFixed(1))
-        : 0,
-      totalAsesores: r.asesores.size,
+  // ── Serializar totales por cartera ────────────────────────────────
+  const resultadoCarteras: Record<string, any> = {}
+  Object.entries(porCartera).forEach(([cartera, r]) => {
+    const tmo = r.intervalosGestion.length > 0
+      ? parseFloat((r.intervalosGestion.reduce((a, b) => a + b, 0) / r.intervalosGestion.length).toFixed(1))
+      : 0
+    resultadoCarteras[cartera] = {
+      llamadas: r.llamadas, efectivas: r.efectivas, promesas: r.promesas,
+      montoPrometido: Math.round(r.montoPrometido), noEfectivas: r.noEfectivas,
+      tiempoPromedioMin: tmo, totalAsesores: r.asesoresSet.size,
     }
   })
-  return resultado
+
+  // ── Serializar productividad por asesor ───────────────────────────
+  const resultadoAsesores: any[] = []
+  Object.entries(porAsesor).forEach(([key, r]) => {
+    const nombre = key.split('||')[0]
+    const diasActivo = r.fechasActivo.size
+    const tmo = r.intervalosGestion.length > 0
+      ? parseFloat((r.intervalosGestion.reduce((a, b) => a + b, 0) / r.intervalosGestion.length).toFixed(1))
+      : 0
+    resultadoAsesores.push({
+      asesor: nombre,
+      cartera: r.cartera,
+      gestiones: r.gestiones,
+      efectivas: r.efectivas,
+      promesas: r.promesas,
+      monto: Math.round(r.monto),
+      noEfectivas: r.noEfectivas,
+      tmoMin: tmo,
+      diasActivo,
+      gestionesPorDia: diasActivo > 0 ? Math.round(r.gestiones / diasActivo) : 0,
+    })
+  })
+
+  return { carteras: resultadoCarteras, asesores: resultadoAsesores }
 }
 
 // ── Leer Blob (fetch con Authorization para acceso privado) ──────────
@@ -543,8 +627,9 @@ export async function POST(req: Request) {
       }
 
       if (tienePiso) {
-        // Limpiar todas las gestiones del piso
+        // Limpiar todas las gestiones del piso y productividad
         mRef.gestionesPiso = {}
+        mRef.productividadAsesores = []
       }
     }
 
@@ -567,10 +652,12 @@ export async function POST(req: Request) {
       }
 
       if (info.tipo === 'piso') {
-        const resumen = procesarPiso(rows)
+        const { carteras: resumenCarteras, asesores: resumenAsesores } = procesarPiso(rows)
         if (!mRef.gestionesPiso) mRef.gestionesPiso = {}
+        if (!mRef.productividadAsesores) mRef.productividadAsesores = []
 
-        Object.entries(resumen).forEach(([cartera, vals]: [string, any]) => {
+        // Guardar totales por cartera
+        Object.entries(resumenCarteras).forEach(([cartera, vals]: [string, any]) => {
           if (!mRef.gestionesPiso[cartera]) {
             mRef.gestionesPiso[cartera] = { llamadas: 0, efectivas: 0, promesas: 0, montoPrometido: 0, noEfectivas: 0, tiempoPromedioMin: 0, totalAsesores: 0 }
           }
@@ -584,9 +671,35 @@ export async function POST(req: Request) {
           if (vals.totalAsesores > p.totalAsesores) p.totalAsesores = vals.totalAsesores
         })
 
-        const gestPiso = Object.values(resumen).reduce((s: number, v: any) => s + v.llamadas, 0)
+        // Guardar productividad por asesor (merge con existentes)
+        resumenAsesores.forEach((nuevoAsesor: any) => {
+          const idx = mRef.productividadAsesores.findIndex(
+            (a: any) => a.asesor === nuevoAsesor.asesor && a.cartera === nuevoAsesor.cartera
+          )
+          if (idx >= 0) {
+            // Sumar al existente
+            const ex = mRef.productividadAsesores[idx]
+            ex.gestiones += nuevoAsesor.gestiones
+            ex.efectivas += nuevoAsesor.efectivas
+            ex.promesas += nuevoAsesor.promesas
+            ex.monto += nuevoAsesor.monto
+            ex.noEfectivas += nuevoAsesor.noEfectivas
+            ex.diasActivo = Math.max(ex.diasActivo, nuevoAsesor.diasActivo)
+            if (nuevoAsesor.tmoMin > 0) ex.tmoMin = nuevoAsesor.tmoMin
+            ex.gestionesPorDia = ex.diasActivo > 0 ? Math.round(ex.gestiones / ex.diasActivo) : 0
+          } else {
+            mRef.productividadAsesores.push(nuevoAsesor)
+          }
+        })
+
+        const gestPiso = Object.values(resumenCarteras).reduce((s: number, v: any) => s + v.llamadas, 0)
         totalGestionesPiso += gestPiso
-        resultados.push({ archivo: archivo.name, tipo: 'piso', ok: true, modo, carteras: Object.keys(resumen).length, gestiones: gestPiso })
+        resultados.push({
+          archivo: archivo.name, tipo: 'piso', ok: true, modo,
+          carteras: Object.keys(resumenCarteras).length,
+          gestiones: gestPiso,
+          asesores: resumenAsesores.length,
+        })
 
       } else if (info.tipo === 'av_cobro' || info.tipo === 'av_recordatorio') {
         const resumen = procesarAV(rows, info)

@@ -155,5 +155,7 @@ export function calcularMetricas(raw: any, mesIdxParam: number, fuente: 'blob' |
     })),
     bolsa,
     plan,
+    // Productividad por asesor — guardada por el procesador de Sigella
+    productividadAsesores: mesActual.productividadAsesores || [],
   }
 }
