@@ -23,6 +23,7 @@ function PanelCarga({ onExito }: { onExito: () => void }) {
   const [modo, setModo] = useState<'reemplazar' | 'agregar'>('reemplazar')
   const [mes, setMes] = useState('2026-05')
   const [cargando, setCargando] = useState(false)
+  const [progreso, setProgreso] = useState({ actual: 0, total: 0, archivo: '' })
   const [resultado, setResultado] = useState<any>(null)
   const [error, setError] = useState('')
 
@@ -45,16 +46,55 @@ function PanelCarga({ onExito }: { onExito: () => void }) {
   const cargar = async () => {
     if (!archivos.length) return
     setCargando(true); setError(''); setResultado(null)
-    try {
-      const fd = new FormData()
-      archivos.forEach(f => fd.append('archivos', f))
-      fd.append('mes', mes)
-      fd.append('modo', modo)
-      const res = await fetch('/api/upload-excel', { method: 'POST', body: fd })
-      const data = await res.json()
-      if (data.ok) { setResultado(data); setArchivos([]); onExito() }
-      else setError(data.error || 'Error al procesar los archivos')
-    } catch (e) { setError(String(e)) }
+
+    const todosResultados: any[] = []
+    let bolsaFinal: any = null
+    let errorGlobal = ''
+
+    // Procesar archivo por archivo para evitar el límite de tamaño de Vercel (4.5MB)
+    for (let i = 0; i < archivos.length; i++) {
+      const archivo = archivos[i]
+      setProgreso({ actual: i + 1, total: archivos.length, archivo: archivo.name })
+      try {
+        const fd = new FormData()
+        fd.append('archivos', archivo)
+        fd.append('mes', mes)
+        // En el primer archivo con modo reemplazar, limpiar los datos anteriores
+        // En los siguientes, siempre agregar para no borrar lo que acabamos de cargar
+        fd.append('modo', i === 0 ? modo : 'agregar')
+
+        const res = await fetch('/api/upload-excel', { method: 'POST', body: fd })
+
+        // Verificar que la respuesta sea JSON antes de parsear
+        const contentType = res.headers.get('content-type') || ''
+        if (!contentType.includes('application/json')) {
+          const texto = await res.text()
+          errorGlobal = `Error en ${archivo.name}: El servidor devolvió una respuesta inesperada. Tamaño del archivo puede ser muy grande.`
+          break
+        }
+
+        const data = await res.json()
+        if (data.ok) {
+          todosResultados.push(...(data.resultados || []))
+          if (data.bolsa) bolsaFinal = data.bolsa
+        } else {
+          todosResultados.push({ archivo: archivo.name, ok: false, error: data.error || 'Error desconocido' })
+        }
+      } catch (e: any) {
+        todosResultados.push({ archivo: archivo.name, ok: false, error: e.message })
+      }
+    }
+
+    if (errorGlobal) {
+      setError(errorGlobal)
+    } else if (todosResultados.length > 0) {
+      setResultado({ resultados: todosResultados, bolsa: bolsaFinal })
+      setArchivos([])
+      onExito()
+    } else {
+      setError('No se procesó ningún archivo.')
+    }
+    setProgreso({ actual: 0, total: 0, archivo: '' })
     setCargando(false)
   }
 
@@ -173,10 +213,31 @@ function PanelCarga({ onExito }: { onExito: () => void }) {
           </div>
         )}
 
+        {/* Progreso de carga */}
+        {cargando && progreso.total > 0 && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-semibold text-blue-800">
+                Procesando {progreso.actual} de {progreso.total}
+              </span>
+              <span className="text-xs text-blue-600">{Math.round((progreso.actual / progreso.total) * 100)}%</span>
+            </div>
+            <div className="h-2 bg-blue-100 rounded-full overflow-hidden">
+              <div
+                className="h-2 bg-blue-500 rounded-full transition-all duration-300"
+                style={{ width: `${(progreso.actual / progreso.total) * 100}%` }}
+              />
+            </div>
+            <div className="text-xs text-blue-600 mt-2 truncate">↳ {progreso.archivo}</div>
+          </div>
+        )}
+
         <button onClick={cargar} disabled={!archivos.length || cargando}
           className="w-full flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-semibold text-white disabled:opacity-40 transition-colors"
           style={{ background: '#0F2444' }}>
-          {cargando ? <><RefreshCw className="w-4 h-4 animate-spin" />Procesando...</> : <><Upload className="w-4 h-4" />Cargar archivos</>}
+          {cargando
+            ? <><RefreshCw className="w-4 h-4 animate-spin" />Procesando {progreso.actual > 0 ? `${progreso.actual}/${progreso.total}` : ''}...</>
+            : <><Upload className="w-4 h-4" />Cargar {archivos.length > 1 ? `${archivos.length} archivos` : 'archivo'}</>}
         </button>
       </div>
     </div>

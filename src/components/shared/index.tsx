@@ -141,14 +141,14 @@ export function ComponenteBolsa({ bolsa, minutosConsumidosMesActual }: BolsaProp
       {/* Historial reciente */}
       <div className="px-6 py-4 bg-slate-50/50 border-t border-slate-100">
         <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">Últimos movimientos</div>
-        <div className="space-y-1.5">
-          {historial.slice(0, 3).map((h, i) => (
-            <div key={i} className="flex items-center justify-between text-xs">
-              <div className="flex items-center gap-2">
-                <span className={`w-1.5 h-1.5 rounded-full ${h.tipo === 'recarga' ? 'bg-emerald-500' : 'bg-slate-400'}`} />
-                <span className="text-slate-600 truncate max-w-[160px]">{h.descripcion}</span>
+        <div className="space-y-2">
+          {historial.slice(0, 4).map((h, i) => (
+            <div key={i} className="flex items-start justify-between gap-3 text-xs">
+              <div className="flex items-start gap-2 flex-1 min-w-0">
+                <span className={`w-1.5 h-1.5 rounded-full mt-0.5 flex-shrink-0 ${h.tipo === 'recarga' ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+                <span className="text-slate-600 leading-relaxed break-words">{h.descripcion}</span>
               </div>
-              <span className={`font-semibold tabular-nums ${h.tipo === 'recarga' ? 'text-emerald-700' : 'text-slate-700'}`}>
+              <span className={`font-semibold tabular-nums flex-shrink-0 ${h.tipo === 'recarga' ? 'text-emerald-700' : 'text-slate-700'}`}>
                 {h.tipo === 'recarga' ? '+' : '-'}{h.cantidad.toLocaleString('es-PA')}
               </span>
             </div>

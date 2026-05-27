@@ -157,42 +157,106 @@ function col(headers: string[], ...opciones: string[]): number {
 }
 
 // ── Procesar archivo del AV ───────────────────────────────────────────
+// Columnas exactas: usuario (Agente) | Fecha | Hora | monto_pagar | empresa_cliente | clasificacion | MINUTOS CONSUMIDOS | TIPO DE CONTACTO
 function procesarAV(rows: any[][], info: InfoArchivo) {
   const headers = rows[0].map(String)
 
-  // Columnas del AV: usuario, telefono, Fecha, HORA, empresa_cliente, monto_pagar, clasificacion, MINUTOS CONSUMIDOS, TIPO DE CONTACTO
-  const cEmpresa = col(headers, 'empresa_cliente', 'empresa', 'proyecto', 'cartera')
-  const cClasif = col(headers, 'clasificacion')
-  const cMinutos = col(headers, 'minutos consumidos', 'minutos', 'duracion', 'duración')
-  const cTipo = col(headers, 'tipo de contacto', 'tipo_contacto', 'tipo')
-  const cMonto = col(headers, 'monto_pagar', 'monto')
+  // Mapeo exacto de columnas del AV
+  const cUsuario  = col(headers, 'usuario', 'agente', 'usuario (agente)')
+  const cFecha    = col(headers, 'fecha')
+  const cHora     = col(headers, 'hora')
+  const cMonto    = col(headers, 'monto_pagar', 'monto')
+  const cEmpresa  = col(headers, 'empresa_cliente', 'empresa', 'proyecto', 'cartera')
+  const cClasif   = col(headers, 'clasificacion')
+  const cMinutos  = col(headers, 'minutos consumidos', 'minutos', 'duracion', 'duración')
+  const cTipo     = col(headers, 'tipo de contacto', 'tipo_contacto', 'tipo')
 
-  const resumen: Record<string, { minutosAV: number; llamadas: number; efectivas: number; promesas: number; montoPrometido: number }> = {}
+  // Estructura extendida con datos de HORA para calcular velocidad de alcance
+  const resumen: Record<string, {
+    minutosAV: number
+    llamadas: number
+    efectivas: number
+    promesas: number
+    montoPrometido: number
+    // Para velocidad de alcance con columna HORA
+    primeraHora: Date | null
+    ultimaHora: Date | null
+    fechasPorDia: Record<string, { primera: Date; ultima: Date; llamadas: number }>
+  }> = {}
 
   for (let i = 1; i < rows.length; i++) {
     const fila = rows[i]
-    if (!fila || fila.every(c => !c)) continue
+    if (!fila || fila.every((c: any) => !c)) continue
 
     // Determinar cartera
     let empresa = ''
     if (info.carteraEspecifica) {
       empresa = info.carteraEspecifica
     } else if (cEmpresa >= 0) {
-      empresa = MAPA_EMPRESA_AV[String(fila[cEmpresa] || '').trim()] || String(fila[cEmpresa] || '').trim().toUpperCase()
+      const raw = String(fila[cEmpresa] || '').trim()
+      empresa = MAPA_EMPRESA_AV[raw] || raw.toUpperCase()
     }
     if (!empresa) continue
 
-    if (!resumen[empresa]) resumen[empresa] = { minutosAV: 0, llamadas: 0, efectivas: 0, promesas: 0, montoPrometido: 0 }
+    if (!resumen[empresa]) {
+      resumen[empresa] = {
+        minutosAV: 0, llamadas: 0, efectivas: 0, promesas: 0, montoPrometido: 0,
+        primeraHora: null, ultimaHora: null, fechasPorDia: {}
+      }
+    }
     const r = resumen[empresa]
-
     r.llamadas += 1
 
-    const minutos = cMinutos >= 0 ? (parseFloat(String(fila[cMinutos] || '0').replace(',', '.')) || 0) : 0
+    // Minutos consumidos
+    const minutos = cMinutos >= 0
+      ? (parseFloat(String(fila[cMinutos] || '0').replace(',', '.')) || 0)
+      : 0
     r.minutosAV += minutos
 
-    const monto = cMonto >= 0 ? (parseFloat(String(fila[cMonto] || '0').replace(/[B/.,]/g, '').trim()) || 0) : 0
+    // Monto
+    const monto = cMonto >= 0
+      ? (parseFloat(String(fila[cMonto] || '0').replace(/[B/.\s]/g, '').replace(',', '.')) || 0)
+      : 0
 
-    // Determinar resultado
+    // ── Cálculo de velocidad de alcance con columna HORA ─────────────
+    // Registramos la hora de cada gestión para saber:
+    // En cuántas horas el AV contacta X cantidad de clientes
+    const horaRaw = cHora >= 0 ? fila[cHora] : null
+    const fechaRaw = cFecha >= 0 ? fila[cFecha] : null
+
+    if (horaRaw && fechaRaw) {
+      let horaDate: Date | null = null
+
+      if (horaRaw instanceof Date) {
+        horaDate = horaRaw
+      } else if (typeof horaRaw === 'string') {
+        const parts = horaRaw.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/)
+        if (parts) {
+          horaDate = new Date()
+          horaDate.setHours(parseInt(parts[1]), parseInt(parts[2]), parseInt(parts[3] || '0'), 0)
+        }
+      }
+
+      if (horaDate) {
+        // Fecha como string para agrupar por día
+        const fechaStr = fechaRaw instanceof Date
+          ? fechaRaw.toISOString().split('T')[0]
+          : String(fechaRaw).split('T')[0]
+
+        if (!r.fechasPorDia[fechaStr]) {
+          r.fechasPorDia[fechaStr] = { primera: horaDate, ultima: horaDate, llamadas: 0 }
+        } else {
+          if (horaDate < r.fechasPorDia[fechaStr].primera) r.fechasPorDia[fechaStr].primera = horaDate
+          if (horaDate > r.fechasPorDia[fechaStr].ultima) r.fechasPorDia[fechaStr].ultima = horaDate
+        }
+        r.fechasPorDia[fechaStr].llamadas += 1
+
+        if (!r.primeraHora || horaDate < r.primeraHora) r.primeraHora = horaDate
+        if (!r.ultimaHora || horaDate > r.ultimaHora) r.ultimaHora = horaDate
+      }
+    }
+
+    // Resultado de la gestión
     const tipoContacto = cTipo >= 0 ? String(fila[cTipo] || '').trim().toUpperCase() : ''
     const clasificacion = cClasif >= 0 ? String(fila[cClasif] || '').trim().toLowerCase() : ''
 
@@ -205,7 +269,60 @@ function procesarAV(rows: any[][], info: InfoArchivo) {
     }
   }
 
-  return resumen
+  // ── Calcular métricas de velocidad de alcance ─────────────────────
+  // velocidadAlcance = llamadas totales / horas operativas totales
+  // horasParaCien    = cuántas horas necesita el AV para contactar 100 clientes
+  const resultado: Record<string, {
+    minutosAV: number; llamadas: number; efectivas: number
+    promesas: number; montoPrometido: number
+    velocidadAlcance: {
+      clientesPorHora: number         // ritmo promedio
+      horasParaCienClientes: number   // cuántas horas para 100 clientes
+      horasOperativasTotal: number    // horas totales en las que el AV trabajó
+      diasConActividad: number        // días distintos con gestiones
+      promedioClientesPorDia: number  // promedio de clientes contactados por día activo
+    }
+  }> = {}
+
+  Object.entries(resumen).forEach(([empresa, r]) => {
+    let horasOperativasTotal = 0
+    const dias = Object.values(r.fechasPorDia)
+
+    dias.forEach(d => {
+      const diffMs = d.ultima.getTime() - d.primera.getTime()
+      const diffHoras = diffMs / (1000 * 60 * 60)
+      // Solo contamos si la diferencia es mayor a 0 (al menos 2 gestiones en el día)
+      if (diffHoras > 0) horasOperativasTotal += diffHoras
+    })
+
+    const diasConActividad = dias.length
+    const clientesPorHora = horasOperativasTotal > 0
+      ? parseFloat((r.llamadas / horasOperativasTotal).toFixed(1))
+      : 0
+    const horasParaCienClientes = clientesPorHora > 0
+      ? parseFloat((100 / clientesPorHora).toFixed(2))
+      : 0
+    const promedioClientesPorDia = diasConActividad > 0
+      ? Math.round(r.llamadas / diasConActividad)
+      : 0
+
+    resultado[empresa] = {
+      minutosAV: Math.round(r.minutosAV * 100) / 100,
+      llamadas: r.llamadas,
+      efectivas: r.efectivas,
+      promesas: r.promesas,
+      montoPrometido: Math.round(r.montoPrometido),
+      velocidadAlcance: {
+        clientesPorHora,
+        horasParaCienClientes,
+        horasOperativasTotal: parseFloat(horasOperativasTotal.toFixed(2)),
+        diasConActividad,
+        promedioClientesPorDia,
+      }
+    }
+  })
+
+  return resultado
 }
 
 // ── Procesar archivo del PISO (Sigella) ──────────────────────────────
@@ -421,6 +538,8 @@ export async function POST(req: Request) {
           mRef.carteras[cartera].efectivas = 0
           mRef.carteras[cartera].promesas = 0
         })
+        // Limpiar velocidad de alcance anterior
+        mRef.velocidadAlcanceAV = {}
       }
 
       if (tienePiso) {
@@ -472,6 +591,9 @@ export async function POST(req: Request) {
       } else if (info.tipo === 'av_cobro' || info.tipo === 'av_recordatorio') {
         const resumen = procesarAV(rows, info)
 
+        // Inicializar contenedor de velocidad de alcance si no existe
+        if (!mRef.velocidadAlcanceAV) mRef.velocidadAlcanceAV = {}
+
         Object.entries(resumen).forEach(([cartera, vals]) => {
           if (!mRef.carteras[cartera]) {
             mRef.carteras[cartera] = { minutosAV: 0, honorario: 0, honorarioMesAnterior: 0, promesas: 0, llamadas: 0, efectivas: 0 }
@@ -481,6 +603,9 @@ export async function POST(req: Request) {
           c.llamadas += vals.llamadas
           c.efectivas += vals.efectivas
           c.promesas += vals.promesas
+
+          // Guardar métricas de velocidad de alcance por cartera
+          mRef.velocidadAlcanceAV[cartera] = vals.velocidadAlcance
         })
 
         const mins = Object.values(resumen).reduce((s, v) => s + v.minutosAV, 0)
@@ -488,11 +613,21 @@ export async function POST(req: Request) {
         totalMinutosAV += mins
         totalGestionesAV += gests
 
+        // Resumen de velocidad para la respuesta
+        const resumenVelocidad = Object.entries(resumen).map(([cartera, v]) => ({
+          cartera,
+          clientesPorHora: v.velocidadAlcance.clientesPorHora,
+          horasParaCienClientes: v.velocidadAlcance.horasParaCienClientes,
+          promedioClientesPorDia: v.velocidadAlcance.promedioClientesPorDia,
+          diasConActividad: v.velocidadAlcance.diasConActividad,
+        })).filter(v => v.clientesPorHora > 0)
+
         resultados.push({
           archivo: archivo.name, tipo: info.tipo, ok: true, modo,
           carteraEspecifica: info.carteraEspecifica,
           carteras: Object.keys(resumen).length,
-          minutos: Math.round(mins), gestiones: gests
+          minutos: Math.round(mins), gestiones: gests,
+          velocidadAlcance: resumenVelocidad,
         })
       } else {
         resultados.push({ archivo: archivo.name, ok: false, error: 'Tipo no reconocido. Verifica el nombre del archivo.' })

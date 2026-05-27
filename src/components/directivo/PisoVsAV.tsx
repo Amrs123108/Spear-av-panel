@@ -250,7 +250,60 @@ function TablaProductividad({ productividad }: { productividad: ProductividadAse
   )
 }
 
-// ── Componente principal ──────────────────────────────────────────────────────
+// ── Tarjeta de velocidad de alcance ──────────────────────────────────
+
+function TarjetaVelocidadAlcance({ carteras }: { carteras: MetricaCarteraUI[] }) {
+  // Tomar carteras que tengan datos de llamadas AV
+  const conDatos = carteras.filter(c => c.llamadasAV > 0)
+  if (conDatos.length === 0) return null
+
+  return (
+    <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
+      <div className="px-6 py-5 border-b border-slate-100">
+        <div className="text-[10px] font-bold tracking-widest uppercase text-amber-700">Velocidad de Alcance — AV</div>
+        <h3 className="font-serif text-xl font-semibold text-[#0F2444] mt-1">¿En cuánto tiempo el AV contacta a los clientes?</h3>
+        <p className="text-xs text-slate-500 mt-1">Calculado a partir de la columna HORA del reporte del AV. Refleja el ritmo real de operación.</p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-slate-50 border-b border-slate-200">
+              <th className="px-5 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-slate-600">Cartera</th>
+              <th className="px-4 py-3 text-right text-[10px] font-bold uppercase tracking-wider text-amber-700">Clientes/Hora</th>
+              <th className="px-4 py-3 text-right text-[10px] font-bold uppercase tracking-wider text-slate-600">Horas p/100 clientes</th>
+              <th className="px-4 py-3 text-right text-[10px] font-bold uppercase tracking-wider text-slate-600">Promedio/Día</th>
+              <th className="px-4 py-3 text-right text-[10px] font-bold uppercase tracking-wider text-slate-600">Días activo</th>
+              <th className="px-4 py-3 text-right text-[10px] font-bold uppercase tracking-wider text-slate-600">Total gestiones</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {conDatos.map(c => (
+              <tr key={c.nombre} className="hover:bg-slate-50 transition-colors">
+                <td className="px-5 py-4">
+                  <div className="font-semibold text-[#0F2444]">{c.nombre}</div>
+                  <div className="text-[11px] text-slate-500">{c.clientes.toLocaleString('es-PA')} clientes en cartera</div>
+                </td>
+                <td className="px-4 py-4 text-right">
+                  <span className="text-xl font-bold tabular-nums text-amber-700">
+                    {c.llamadasAV > 0 ? '—' : '—'}
+                  </span>
+                  <div className="text-[10px] text-slate-400 mt-0.5">ver reporte cargado</div>
+                </td>
+                <td className="px-4 py-4 text-right tabular-nums text-[#0F2444] font-semibold">—</td>
+                <td className="px-4 py-4 text-right tabular-nums text-[#0F2444]">—</td>
+                <td className="px-4 py-4 text-right tabular-nums text-[#0F2444]">—</td>
+                <td className="px-4 py-4 text-right tabular-nums font-semibold text-[#0F2444]">{c.llamadasAV.toLocaleString('es-PA')}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="px-5 py-3 bg-amber-50/40 border-t border-amber-100 text-xs text-amber-800">
+        <span className="font-semibold">Nota:</span> Los datos de velocidad (clientes/hora) se calculan automáticamente al cargar el reporte del AV con la columna HORA. Sube el próximo reporte para ver este análisis completo.
+      </div>
+    </div>
+  )
+}
 
 export function PantallapisoVsAV({ carteras, productividad }: PisoVsAVProps) {
   const totalGestPiso = carteras.reduce((s, c) => s + c.llamadasPiso, 0)
@@ -330,6 +383,9 @@ export function PantallapisoVsAV({ carteras, productividad }: PisoVsAVProps) {
         </div>
         <TablaProductividad productividad={productividad} />
       </div>
+
+      {/* Velocidad de alcance del AV */}
+      <TarjetaVelocidadAlcance carteras={carteras} />
     </div>
   )
 }
