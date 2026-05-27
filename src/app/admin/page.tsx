@@ -377,7 +377,7 @@ function PanelReset({ onExito }: { onExito: () => void }) {
       })
       const data = await res.json()
       if (data.ok) {
-        setResultado(`✓ Datos del mes ${mesReset} borrados. ${preservarHonorario ? 'Honorarios preservados.' : 'Honorarios también borrados.'}`)
+        setResultado(`✓ Datos del mes ${mesReset} borrados. Los minutos se devolvieron a la bolsa. ${preservarHonorario ? 'Honorarios preservados.' : 'Honorarios también borrados.'} Ahora puedes cargar los archivos correctamente.`)
         onExito()
       } else {
         setError(data.error || 'Error al resetear')
@@ -423,7 +423,7 @@ function PanelReset({ onExito }: { onExito: () => void }) {
         <div className="border border-slate-200 rounded-lg p-4 space-y-4">
           <div>
             <div className="text-sm font-semibold text-[#0F2444] mb-1">Borrar datos de un mes</div>
-            <p className="text-xs text-slate-500">Borra minutos AV, gestiones del piso y productividad de asesores del mes seleccionado. Deja el mes limpio para cargar de nuevo.</p>
+            <p className="text-xs text-slate-500">Borra minutos AV, gestiones del piso y productividad de asesores del mes seleccionado. Los minutos se devuelven automáticamente a la bolsa. Deja el mes limpio para cargar de nuevo.</p>
           </div>
 
           <div className="grid grid-cols-2 gap-3">

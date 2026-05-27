@@ -185,8 +185,6 @@ export async function POST(req: Request) {
       }
 
       case 'reset_mes': {
-        // Borra TODOS los datos operativos de un mes específico
-        // Preserva el honorario si se indicó
         const { mes, preservarHonorario } = datos
         const idx = datosActuales.historico.findIndex((m: any) => m.mes === mes)
         if (idx < 0) return NextResponse.json({ ok: false, error: `Mes ${mes} no encontrado` }, { status: 404 })
@@ -194,10 +192,23 @@ export async function POST(req: Request) {
         const mesRef = datosActuales.historico[idx]
         const honorariosGuardados: Record<string, number> = {}
 
-        // Guardar honorarios si se pide preservar
         if (preservarHonorario) {
           Object.entries(mesRef.carteras || {}).forEach(([nombre, c]: [string, any]) => {
             if (c.honorario > 0) honorariosGuardados[nombre] = c.honorario
+          })
+        }
+
+        // ── Devolver minutos a la bolsa antes de borrar ───────────────
+        const minutosActuales = Object.values(mesRef.carteras || {})
+          .reduce((s: number, c: any) => s + (c.minutosAV || 0), 0)
+
+        if (minutosActuales > 0) {
+          datosActuales.bolsa.saldoActual += minutosActuales
+          datosActuales.bolsa.historial.unshift({
+            fecha: new Date().toISOString().split('T')[0],
+            tipo: 'recarga',
+            cantidad: minutosActuales,
+            descripcion: `Devolución por reset — ${mes} (+${minutosActuales.toLocaleString('es-PA')} min)`
           })
         }
 
