@@ -346,6 +346,164 @@ function FormularioCierreMes({ onGuardar }: { onGuardar: () => void }) {
   )
 }
 
+// ── Panel de Reset ────────────────────────────────────────────────────
+
+function PanelReset({ onExito }: { onExito: () => void }) {
+  const [mesReset, setMesReset] = useState('2026-05')
+  const [preservarHonorario, setPreservarHonorario] = useState(true)
+  const [cargando, setCargando] = useState(false)
+  const [confirmandoTotal, setConfirmandoTotal] = useState(false)
+  const [resultado, setResultado] = useState('')
+  const [error, setError] = useState('')
+
+  const meses = [
+    { value: '2026-05', label: 'MAY 2026 (actual)' },
+    { value: '2026-04', label: 'ABR 2026' },
+    { value: '2026-03', label: 'MAR 2026' },
+    { value: '2026-02', label: 'FEB 2026' },
+    { value: '2026-01', label: 'ENE 2026' },
+  ]
+
+  const resetMes = async () => {
+    setCargando(true); setError(''); setResultado('')
+    try {
+      const res = await fetch('/api/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          accion: 'reset_mes',
+          datos: { mes: mesReset, preservarHonorario }
+        })
+      })
+      const data = await res.json()
+      if (data.ok) {
+        setResultado(`✓ Datos del mes ${mesReset} borrados. ${preservarHonorario ? 'Honorarios preservados.' : 'Honorarios también borrados.'}`)
+        onExito()
+      } else {
+        setError(data.error || 'Error al resetear')
+      }
+    } catch (e) { setError(String(e)) }
+    setCargando(false)
+  }
+
+  const resetTotal = async () => {
+    setCargando(true); setError(''); setResultado('')
+    try {
+      const res = await fetch('/api/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          accion: 'reset_todo',
+          datos: { confirmacion: 'CONFIRMAR_RESET_TOTAL' }
+        })
+      })
+      const data = await res.json()
+      if (data.ok) {
+        setResultado('✓ Blob reiniciado con datos originales. Todo listo para cargar de nuevo.')
+        setConfirmandoTotal(false)
+        onExito()
+      } else {
+        setError(data.error || 'Error al resetear')
+      }
+    } catch (e) { setError(String(e)) }
+    setCargando(false)
+  }
+
+  return (
+    <div className="bg-white border border-red-200 rounded-lg overflow-hidden shadow-sm">
+      <div className="px-6 py-5 border-b border-red-100 bg-red-50">
+        <div className="text-[10px] font-bold tracking-widest uppercase text-red-600">Zona de Reset</div>
+        <h3 className="font-serif text-xl font-semibold text-red-900 mt-1">Borrar y Recargar Datos</h3>
+        <p className="text-xs text-red-700 mt-1">Usa esto cuando necesites borrar una carga incorrecta y volver a empezar.</p>
+      </div>
+
+      <div className="p-6 space-y-5">
+
+        {/* Reset de un mes específico */}
+        <div className="border border-slate-200 rounded-lg p-4 space-y-4">
+          <div>
+            <div className="text-sm font-semibold text-[#0F2444] mb-1">Borrar datos de un mes</div>
+            <p className="text-xs text-slate-500">Borra minutos AV, gestiones del piso y productividad de asesores del mes seleccionado. Deja el mes limpio para cargar de nuevo.</p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Eyebrow>Mes a borrar</Eyebrow>
+              <select value={mesReset} onChange={e => setMesReset(e.target.value)}
+                className="mt-1.5 w-full border border-slate-300 rounded px-3 py-2 text-sm outline-none focus:border-red-400 font-semibold text-[#0F2444]">
+                {meses.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+              </select>
+            </div>
+            <div className="flex items-end">
+              <label className="flex items-center gap-2 cursor-pointer pb-2">
+                <input
+                  type="checkbox"
+                  checked={preservarHonorario}
+                  onChange={e => setPreservarHonorario(e.target.checked)}
+                  className="w-4 h-4 accent-emerald-600"
+                />
+                <span className="text-sm text-slate-700">Preservar honorarios</span>
+              </label>
+            </div>
+          </div>
+
+          <div className={`text-xs p-3 rounded-lg ${preservarHonorario ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-amber-50 text-amber-800 border border-amber-200'}`}>
+            {preservarHonorario
+              ? '✓ Los honorarios ingresados manualmente se conservan. Solo se borran minutos AV y gestiones del piso.'
+              : '⚠ Se borrarán también los honorarios. Tendrás que volver a ingresarlos.'}
+          </div>
+
+          <button onClick={resetMes} disabled={cargando}
+            className="w-full flex items-center justify-center gap-2 py-2.5 rounded text-sm font-semibold text-white bg-red-600 hover:bg-red-700 disabled:opacity-40 transition-colors">
+            {cargando ? <><RefreshCw className="w-4 h-4 animate-spin" />Borrando...</> : <>🗑 Borrar datos del mes</>}
+          </button>
+        </div>
+
+        {/* Reset total */}
+        <div className="border border-red-200 rounded-lg p-4 space-y-3 bg-red-50/50">
+          <div>
+            <div className="text-sm font-semibold text-red-900 mb-1">⚠ Reset total del sistema</div>
+            <p className="text-xs text-red-700">Borra TODO el Blob y vuelve al estado inicial (datos históricos nov 2025 - abr 2026 solamente). Úsalo solo si necesitas empezar desde cero.</p>
+          </div>
+
+          {!confirmandoTotal ? (
+            <button onClick={() => setConfirmandoTotal(true)}
+              className="w-full py-2 rounded text-sm font-semibold text-red-700 bg-white border border-red-300 hover:bg-red-50 transition-colors">
+              Reiniciar sistema completo
+            </button>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-xs font-bold text-red-800 text-center">¿Estás seguro? Esta acción no se puede deshacer.</p>
+              <div className="grid grid-cols-2 gap-2">
+                <button onClick={() => setConfirmandoTotal(false)}
+                  className="py-2 rounded text-sm font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 transition-colors">
+                  Cancelar
+                </button>
+                <button onClick={resetTotal} disabled={cargando}
+                  className="py-2 rounded text-sm font-semibold text-white bg-red-700 hover:bg-red-800 disabled:opacity-40 transition-colors">
+                  {cargando ? 'Borrando...' : 'Sí, reiniciar todo'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Resultado */}
+        {resultado && (
+          <div className="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-sm text-emerald-800">
+            <CheckCircle2 className="w-4 h-4 flex-shrink-0" />{resultado}
+          </div>
+        )}
+        {error && (
+          <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-800">
+            <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />{error}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── Estado del sistema ────────────────────────────────────────────────────────
 
 function EstadoSistema({ bolsa, fuenteDatos }: { bolsa: BolsaMinutos | null; fuenteDatos: string }) {
@@ -442,6 +600,7 @@ export default function PageAdmin() {
           <div className="lg:col-span-2 space-y-6">
             <PanelCarga onExito={cargarEstado} />
             <FormularioCierreMes onGuardar={cargarEstado} />
+            <PanelReset onExito={cargarEstado} />
           </div>
 
           {/* Columna lateral */}

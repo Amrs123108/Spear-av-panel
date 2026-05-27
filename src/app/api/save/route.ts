@@ -184,6 +184,64 @@ export async function POST(req: Request) {
         break
       }
 
+      case 'reset_mes': {
+        // Borra TODOS los datos operativos de un mes específico
+        // Preserva el honorario si se indicó
+        const { mes, preservarHonorario } = datos
+        const idx = datosActuales.historico.findIndex((m: any) => m.mes === mes)
+        if (idx < 0) return NextResponse.json({ ok: false, error: `Mes ${mes} no encontrado` }, { status: 404 })
+
+        const mesRef = datosActuales.historico[idx]
+        const honorariosGuardados: Record<string, number> = {}
+
+        // Guardar honorarios si se pide preservar
+        if (preservarHonorario) {
+          Object.entries(mesRef.carteras || {}).forEach(([nombre, c]: [string, any]) => {
+            if (c.honorario > 0) honorariosGuardados[nombre] = c.honorario
+          })
+        }
+
+        // Reset completo del mes
+        Object.keys(mesRef.carteras || {}).forEach(nombre => {
+          mesRef.carteras[nombre] = {
+            minutosAV: 0,
+            honorario: preservarHonorario ? (honorariosGuardados[nombre] || 0) : 0,
+            honorarioMesAnterior: mesRef.carteras[nombre].honorarioMesAnterior || 0,
+            promesas: 0, llamadas: 0, efectivas: 0,
+          }
+        })
+        mesRef.gestionesPiso = {}
+        mesRef.productividadAsesores = []
+        mesRef.velocidadAlcanceAV = {}
+        mesRef.minutosConsumidos = 0
+        mesRef.honorarioTotal = preservarHonorario
+          ? Object.values(honorariosGuardados).reduce((s: number, v: number) => s + v, 0)
+          : 0
+        break
+      }
+
+      case 'reset_todo': {
+        // Reinicia el Blob completo con el histórico del store
+        // ⚠️ ACCIÓN IRREVERSIBLE — borra todo y vuelve al estado inicial
+        const { confirmacion } = datos
+        if (confirmacion !== 'CONFIRMAR_RESET_TOTAL') {
+          return NextResponse.json({ ok: false, error: 'Falta confirmación' }, { status: 400 })
+        }
+        datosActuales = {
+          version: 1,
+          historico: HISTORICO_INICIAL,
+          bolsa: BOLSA_INICIAL,
+          plan: PLAN_INICIAL,
+          configuracion: {
+            carteras: CARTERAS_CONFIG,
+            costoFijoMensualAV: COSTO_FIJO_MENSUAL_AV,
+            costoPisoAsesor: COSTO_PISO_ASESOR,
+            minutosIncluidosMes: 14000,
+          }
+        }
+        break
+      }
+
       case 'guardar_plan': {
         datosActuales.plan = datos
         break
