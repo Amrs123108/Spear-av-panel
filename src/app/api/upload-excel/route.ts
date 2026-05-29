@@ -183,13 +183,15 @@ function procesarAV(rows: any[][], info: InfoArchivo) {
   const cTipo     = col(headers, 'tipo de contacto', 'tipo_contacto', 'tipo')
 
   // Estructura extendida con datos de HORA para calcular velocidad de alcance
+  const FECHA_CORTE_BOLSA = '2026-05-21' // Solo minutos DESPUÉS de esta fecha afectan la bolsa
+
   const resumen: Record<string, {
-    minutosAV: number
+    minutosAV: number          // total de minutos del mes (para el panel)
+    minutosParaBolsa: number   // solo minutos de gestiones DESPUÉS del 21-05 (para descontar)
     llamadas: number
     efectivas: number
     promesas: number
     montoPrometido: number
-    // Para velocidad de alcance con columna HORA
     primeraHora: Date | null
     ultimaHora: Date | null
     fechasPorDia: Record<string, { primera: Date; ultima: Date; llamadas: number }>
@@ -204,14 +206,12 @@ function procesarAV(rows: any[][], info: InfoArchivo) {
     if (info.carteraEspecifica) {
       empresa = info.carteraEspecifica
     } else if (cEmpresa >= 0) {
-      // Normalización agresiva — elimina todos los tipos de espacios incluyendo \u00A0
       const rawOriginal = String(fila[cEmpresa] || '')
         .replace(/^\s+|\s+$/g, '')
         .replace(/\u00A0/g, ' ')
         .replace(/\t/g, ' ')
         .replace(/\s+/g, ' ')
         .trim()
-      // Buscar: exacto → uppercase → lowercase → fallback uppercase
       empresa = MAPA_EMPRESA_AV[rawOriginal]
         || MAPA_EMPRESA_AV[rawOriginal.toUpperCase()]
         || MAPA_EMPRESA_AV[rawOriginal.toLowerCase()]
@@ -221,7 +221,7 @@ function procesarAV(rows: any[][], info: InfoArchivo) {
 
     if (!resumen[empresa]) {
       resumen[empresa] = {
-        minutosAV: 0, llamadas: 0, efectivas: 0, promesas: 0, montoPrometido: 0,
+        minutosAV: 0, minutosParaBolsa: 0, llamadas: 0, efectivas: 0, promesas: 0, montoPrometido: 0,
         primeraHora: null, ultimaHora: null, fechasPorDia: {}
       }
     }
@@ -233,6 +233,33 @@ function procesarAV(rows: any[][], info: InfoArchivo) {
       ? (parseFloat(String(fila[cMinutos] || '0').replace(',', '.')) || 0)
       : 0
     r.minutosAV += minutos
+
+    // ── Determinar si esta gestión es posterior al corte de bolsa ─────
+    // Solo los minutos de gestiones con Fecha > 21-05-2026 se descuentan
+    let fechaGestion = ''
+    if (cFecha >= 0 && fila[cFecha]) {
+      const fv = fila[cFecha]
+      if (fv instanceof Date) {
+        fechaGestion = fv.toISOString().split('T')[0]
+      } else {
+        const str = String(fv).trim()
+        // Normalizar formato DD/MM/YYYY o YYYY-MM-DD
+        if (str.match(/^\d{2}\/\d{2}\/\d{4}$/)) {
+          const [d, m, y] = str.split('/')
+          fechaGestion = `${y}-${m}-${d}`
+        } else if (str.match(/^\d{4}-\d{2}-\d{2}/)) {
+          fechaGestion = str.split('T')[0]
+        } else if (str.match(/^\d{2}-\d{2}-\d{4}$/)) {
+          const [d, m, y] = str.split('-')
+          fechaGestion = `${y}-${m}-${d}`
+        }
+      }
+    }
+
+    // Solo contar para la bolsa si la fecha es POSTERIOR al corte
+    if (fechaGestion && fechaGestion > FECHA_CORTE_BOLSA) {
+      r.minutosParaBolsa += minutos
+    }
 
     // Monto
     const monto = cMonto >= 0
@@ -294,14 +321,14 @@ function procesarAV(rows: any[][], info: InfoArchivo) {
   // velocidadAlcance = llamadas totales / horas operativas totales
   // horasParaCien    = cuántas horas necesita el AV para contactar 100 clientes
   const resultado: Record<string, {
-    minutosAV: number; llamadas: number; efectivas: number
+    minutosAV: number; minutosParaBolsa: number; llamadas: number; efectivas: number
     promesas: number; montoPrometido: number
     velocidadAlcance: {
-      clientesPorHora: number         // ritmo promedio
-      horasParaCienClientes: number   // cuántas horas para 100 clientes
-      horasOperativasTotal: number    // horas totales en las que el AV trabajó
-      diasConActividad: number        // días distintos con gestiones
-      promedioClientesPorDia: number  // promedio de clientes contactados por día activo
+      clientesPorHora: number
+      horasParaCienClientes: number
+      horasOperativasTotal: number
+      diasConActividad: number
+      promedioClientesPorDia: number
     }
   }> = {}
 
@@ -329,6 +356,7 @@ function procesarAV(rows: any[][], info: InfoArchivo) {
 
     resultado[empresa] = {
       minutosAV: Math.round(r.minutosAV * 100) / 100,
+      minutosParaBolsa: Math.round(r.minutosParaBolsa * 100) / 100,
       llamadas: r.llamadas,
       efectivas: r.efectivas,
       promesas: r.promesas,
@@ -703,29 +731,28 @@ export async function POST(req: Request) {
       } else if (info.tipo === 'av_cobro' || info.tipo === 'av_recordatorio') {
         const resumen = procesarAV(rows, info)
 
-        // Inicializar contenedor de velocidad de alcance si no existe
         if (!mRef.velocidadAlcanceAV) mRef.velocidadAlcanceAV = {}
 
         Object.entries(resumen).forEach(([cartera, vals]) => {
           if (!mRef.carteras[cartera]) {
-            mRef.carteras[cartera] = { minutosAV: 0, honorario: 0, honorarioMesAnterior: 0, promesas: 0, llamadas: 0, efectivas: 0 }
+            mRef.carteras[cartera] = { minutosAV: 0, minutosParaBolsa: 0, honorario: 0, honorarioMesAnterior: 0, promesas: 0, llamadas: 0, efectivas: 0 }
           }
           const c = mRef.carteras[cartera]
           c.minutosAV += Math.round(vals.minutosAV)
+          // minutosParaBolsa: solo los de fecha > 21-05-2026
+          c.minutosParaBolsa = (c.minutosParaBolsa || 0) + Math.round(vals.minutosParaBolsa)
           c.llamadas += vals.llamadas
           c.efectivas += vals.efectivas
           c.promesas += vals.promesas
-
-          // Guardar métricas de velocidad de alcance por cartera
           mRef.velocidadAlcanceAV[cartera] = vals.velocidadAlcance
         })
 
         const mins = Object.values(resumen).reduce((s, v) => s + v.minutosAV, 0)
+        const minsParaBolsa = Object.values(resumen).reduce((s, v) => s + v.minutosParaBolsa, 0)
         const gests = Object.values(resumen).reduce((s, v) => s + v.llamadas, 0)
         totalMinutosAV += mins
         totalGestionesAV += gests
 
-        // Resumen de velocidad para la respuesta
         const resumenVelocidad = Object.entries(resumen).map(([cartera, v]) => ({
           cartera,
           clientesPorHora: v.velocidadAlcance.clientesPorHora,
@@ -738,7 +765,9 @@ export async function POST(req: Request) {
           archivo: archivo.name, tipo: info.tipo, ok: true, modo,
           carteraEspecifica: info.carteraEspecifica,
           carteras: Object.keys(resumen).length,
-          minutos: Math.round(mins), gestiones: gests,
+          minutos: Math.round(mins),
+          minutosParaBolsa: Math.round(minsParaBolsa),
+          gestiones: gests,
           velocidadAlcance: resumenVelocidad,
         })
       } else {
@@ -750,35 +779,13 @@ export async function POST(req: Request) {
     // ── Recalcular totales del mes ────────────────────────────────────
     const carts = mRef.carteras
     mRef.minutosConsumidos = Object.values(carts).reduce((s: number, c: any) => s + (c.minutosAV || 0), 0)
+    // minutosParaBolsaMes: solo los minutos después del 21-05 → es lo que descuenta la bolsa
+    mRef.minutosParaBolsa = Object.values(carts).reduce((s: number, c: any) => s + (c.minutosParaBolsa || 0), 0)
     mRef.honorarioTotal = Object.values(carts).reduce((s: number, c: any) => s + (c.honorario || 0), 0)
 
-    // ── Actualizar la bolsa — diferencia NETA real (después - antes) ──
-    // Este cálculo es siempre correcto independientemente del modo:
-    // Si subiste 9,234 min y antes había 9,234 → diferencia = 0 → no descuenta
-    // Si subiste 9,234 min y antes había 0     → diferencia = 9,234 → descuenta
-    // Si subiste 8,000 min y antes había 9,234 → diferencia = -1,234 → devuelve
-    const minutosDelMesDespues = mRef.minutosConsumidos
-    const diferenciaNeta = minutosDelMesDespues - minutosDelMesAntes
-
-    if (diferenciaNeta > 0) {
-      datosActuales.bolsa.saldoActual = Math.max(0, datosActuales.bolsa.saldoActual - diferenciaNeta)
-      datosActuales.bolsa.historial.unshift({
-        fecha: new Date().toISOString().split('T')[0],
-        tipo: 'consumo',
-        cantidad: diferenciaNeta,
-        descripcion: `Consumo cargado — ${mes} (${diferenciaNeta.toLocaleString('es-PA')} min)`
-      })
-    } else if (diferenciaNeta < 0) {
-      const devolucion = Math.abs(diferenciaNeta)
-      datosActuales.bolsa.saldoActual += devolucion
-      datosActuales.bolsa.historial.unshift({
-        fecha: new Date().toISOString().split('T')[0],
-        tipo: 'recarga',
-        cantidad: devolucion,
-        descripcion: `Ajuste automático — ${mes} (+${devolucion.toLocaleString('es-PA')} min devueltos)`
-      })
-    }
-    // diferenciaNeta === 0 → mismos minutos, bolsa no cambia
+    // ── Bolsa: NO se toca aquí ────────────────────────────────────────
+    // La bolsa se calcula determinísticamente en la calculadora usando
+    // minutosConsumidos real de cada mes. No hay riesgo de duplicación.
 
     await escribirBlob(datosActuales)
 
@@ -791,14 +798,10 @@ export async function POST(req: Request) {
         totalMinutosAV: Math.round(totalMinutosAV),
         totalGestionesAV, totalGestionesPiso,
         nota: modo === 'reemplazar'
-          ? 'Los datos anteriores del mes fueron reemplazados por este archivo.'
+          ? 'Los datos anteriores del mes fueron reemplazados.'
           : 'Los datos fueron sumados a los existentes.',
       },
-      bolsa: {
-        saldoActual: datosActuales.bolsa.saldoActual,
-        minutosDescontados: diferenciaNeta > 0 ? diferenciaNeta : 0,
-        minutosDevueltos: diferenciaNeta < 0 ? Math.abs(diferenciaNeta) : 0,
-      }
+      bolsaMinutosDelMes: mRef.minutosConsumidos,
     })
   } catch (e) {
     console.error('Error en upload-excel:', e)

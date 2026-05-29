@@ -198,21 +198,8 @@ export async function POST(req: Request) {
           })
         }
 
-        // ── Devolver minutos a la bolsa antes de borrar ───────────────
-        const minutosActuales = Object.values(mesRef.carteras || {})
-          .reduce((s: number, c: any) => s + (c.minutosAV || 0), 0)
-
-        if (minutosActuales > 0) {
-          datosActuales.bolsa.saldoActual += minutosActuales
-          datosActuales.bolsa.historial.unshift({
-            fecha: new Date().toISOString().split('T')[0],
-            tipo: 'recarga',
-            cantidad: minutosActuales,
-            descripcion: `Devolución por reset — ${mes} (+${minutosActuales.toLocaleString('es-PA')} min)`
-          })
-        }
-
-        // Reset completo del mes
+        // Reset completo del mes — la bolsa se recalcula automáticamente
+        // al leer los datos porque usa minutosConsumidos reales del histórico
         Object.keys(mesRef.carteras || {}).forEach(nombre => {
           mesRef.carteras[nombre] = {
             minutosAV: 0,

@@ -5,14 +5,20 @@
 import { DashboardData, MetricaCarteraUI, ResumenMesUI, EstadoMes, SemaforoCarta } from '@/types'
 import { ROL_POR_CARTERA } from '@/lib/valorAV'
 import { COSTO_FIJO_MENSUAL_AV, COSTO_PISO_ASESOR } from '@/lib/store'
+import { calcularSaldoBolsa } from '@/lib/bolsa'
 
 const COSTO_HORA_ASESOR = COSTO_PISO_ASESOR / 176 // B/.8.52/hora
 
 export function calcularMetricas(raw: any, mesIdxParam: number, fuente: 'blob' | 'local'): DashboardData {
-  const { historico, bolsa, plan } = raw
+  const { historico, plan } = raw
   const carteras = raw.configuracion?.carteras ?? []
   const costoFijo = raw.configuracion?.costoFijoMensualAV ?? COSTO_FIJO_MENSUAL_AV
   const costoPisoAsesor = raw.configuracion?.costoPisoAsesor ?? COSTO_PISO_ASESOR
+
+  // ── Bolsa calculada determinísticamente desde el histórico real ─────
+  // Nunca usa el saldo guardado en Blob — siempre recalcula desde cero.
+  // Esto lo hace inmune a cargas duplicadas, resets o errores previos.
+  const bolsa = calcularSaldoBolsa(historico, raw.bolsa)
 
   const mesIdx = mesIdxParam >= 0 && mesIdxParam < historico.length ? mesIdxParam : historico.length - 1
   const mesActual = historico[mesIdx]

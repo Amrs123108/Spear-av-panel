@@ -201,6 +201,25 @@ export const BOLSA_INICIAL: BolsaMinutos = {
   ]
 }
 
+// ── Configuración del cálculo determinista de la bolsa ────────────────
+// La bolsa siempre se calcula como:
+// saldo = minutos_acumulados_totales - minutos_consumidos_reales
+//
+// Minutos acumulados: desde ENE 2026 SPEAR tiene 14,000/mes acumulables.
+// Para calcular el saldo en cualquier momento:
+//   1. Sumar todas las recargas desde el primer mes con AV
+//   2. Restar la suma de minutosConsumidos reales de cada mes del histórico
+//
+// Esto hace el cálculo INMUNE a cargas duplicadas, resets o errores anteriores.
+export const BOLSA_CONFIG = {
+  minutosPorMes: 14000,
+  // Fecha desde la que empezaron a acumularse los minutos
+  mesInicioAcumulacion: '2026-01',
+  // Recargas fijas previas al sistema (antes de ENE 2026)
+  // No se incluyen porque no hay consumo previo registrado
+  saldoPrevioAlSistema: 0,
+}
+
 export const PLAN_INICIAL: PlanSemanal[] = [
   {
     id: "plan-actual",
